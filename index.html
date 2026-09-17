@@ -543,8 +543,8 @@
           await roomDocRef.set({ hostId: myId, phase: 'lobby' });
         }
       } catch (e) {
-        isHost = false;
-        roomPhase = 'lobby';
+        reportWriteError(e);
+        return; // 連線失敗就停在這裡，不要顯示半殘的大廳畫面
       }
 
       document.getElementById('pre-connect-panel').style.display = 'none';
