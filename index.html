@@ -370,6 +370,12 @@
           <span id="prompt-skip-link" style="display:none; text-decoration:underline; cursor:pointer; color:#aaa; font-size:0.75rem;" onclick="skipPromptAnswer()">只用講的，不寫進看板</span>
         </div>
       </div>
+
+      <div class="finish-panel" id="all-done-panel">
+        <div class="finish-title">🎉 大家都上場分享過一輪了！</div>
+        <button class="pixel-btn green" id="host-advance-btn" onclick="hostAdvanceToBoard()" style="display:none;">✅ 帶大家前往看板 →</button>
+        <div id="wait-advance-msg" class="net-status" style="display:none;">⏳ 等待房主帶大家前往看板...</div>
+      </div>
     </div>
   </section>
 
@@ -933,12 +939,16 @@
     function updateTurnUI() {
       const banner = document.getElementById('turn-banner');
       const diceBtn = document.getElementById('dice-btn');
+      const allDonePanel = document.getElementById('all-done-panel');
+      const hostAdvanceBtn = document.getElementById('host-advance-btn');
+      const waitAdvanceMsg = document.getElementById('wait-advance-msg');
       if (!banner || !diceBtn) return;
 
       // 單機模式（沒有房間）：不套用輪流制，永遠可以擲骰子
       if (!playersRef) {
         banner.style.display = 'none';
         diceBtn.style.display = '';
+        if (allDonePanel) allDonePanel.style.display = 'none';
         return;
       }
 
@@ -946,8 +956,12 @@
       if (everyoneAnswered) {
         banner.style.display = 'none';
         diceBtn.style.display = 'none';
+        if (allDonePanel) allDonePanel.style.display = 'block';
+        if (hostAdvanceBtn) hostAdvanceBtn.style.display = isHost ? 'inline-flex' : 'none';
+        if (waitAdvanceMsg) waitAdvanceMsg.style.display = isHost ? 'none' : 'block';
         return;
       }
+      if (allDonePanel) allDonePanel.style.display = 'none';
 
       const curId = currentTurnPlayerId();
       const isMyTurn = curId === myId;
@@ -1056,11 +1070,12 @@
       if (!roomDocRef || !turnOrder.length) return;
       const newAnswered = answeredIds.includes(myId) ? answeredIds.slice() : answeredIds.concat([myId]);
       const nextIndex = (currentTurnIndex + 1) % turnOrder.length;
-      const updates = { currentTurnIndex: nextIndex, answeredIds: newAnswered };
-      if (newAnswered.length >= turnOrder.length) {
-        updates.phase = 'finished'; // 全部人都輪過一次了，廣播讓大家一起進看板
-      }
-      roomDocRef.update(updates).catch(reportWriteError);
+      roomDocRef.update({ currentTurnIndex: nextIndex, answeredIds: newAnswered }).catch(reportWriteError);
+    }
+
+    function hostAdvanceToBoard() {
+      if (!roomDocRef || !isHost) return;
+      roomDocRef.update({ phase: 'finished' }).catch(reportWriteError);
     }
 
     function onMapFinished() {
