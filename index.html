@@ -29,15 +29,7 @@
     header h1 { font-family: 'VT323', monospace; font-size: 1.8rem; color: var(--accent-green); line-height: 1.1; }
     header p { color: var(--accent-yellow); font-size: 0.85rem; margin-top: 4px; }
 
-    .main-nav { display: flex; gap: 6px; margin-bottom: 14px; }
-    .nav-btn {
-      flex: 1; text-align: center; padding: 10px 2px;
-      background: #282a36; border: 2px solid #44475a; color: #9aa;
-      font-family: 'VT323', monospace; font-size: 1.05rem; line-height: 1.2;
-      cursor: pointer; touch-action: manipulation;
-    }
-    .nav-btn.active { background: var(--accent-green); border-color: var(--accent-green); color: #000; font-weight: bold; }
-    .nav-btn.disabled { opacity: 0.35; pointer-events: none; }
+    .main-nav { display: none; }
     .page { display: none; }
     .page.page-active { display: block; }
 
@@ -247,12 +239,6 @@
     <p>多人即時連線 Sprint 回顧會</p>
   </header>
 
-  <nav class="main-nav">
-    <div class="nav-btn active" data-page="join" onclick="switchNav('join')">🚪 加入</div>
-    <div class="nav-btn disabled" data-page="map" onclick="switchNav('map')">🎲 地圖</div>
-    <div class="nav-btn" data-page="board" onclick="switchNav('board')">📌 看板</div>
-  </nav>
-
   <section class="page page-active" id="page-join">
     <div class="howto-panel">
       <div class="howto-title">📖 使用步驟</div>
@@ -459,13 +445,9 @@
     }
 
     function switchNav(page) {
-      const mapBtn = document.querySelector('.nav-btn[data-page="map"]');
-      if (page === 'map' && mapBtn && mapBtn.classList.contains('disabled')) return;
-
       document.querySelectorAll('.page').forEach(p => p.classList.remove('page-active'));
       const target = document.getElementById('page-' + page);
       if (target) target.classList.add('page-active');
-      document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.page === page));
       if (page === 'map') {
         requestAnimationFrame(() => { renderMap(); });
       }
@@ -514,9 +496,7 @@
 
     function initSync() {
       if (!db || !fbAuth) {
-        updateStatus("Firebase 尚未正確初始化，僅能單機使用（請檢查 firebaseConfig 或網路連線）");
-        const mapBtn = document.querySelector('.nav-btn[data-page="map"]');
-        if (mapBtn) mapBtn.classList.remove('disabled');
+        updateStatus("Firebase 尚未正確初始化，請檢查 firebaseConfig 或網路連線後重新整理頁面");
         return;
       }
 
@@ -528,9 +508,7 @@
       });
 
       fbAuth.signInAnonymously().catch((err) => {
-        updateStatus(`匿名登入失敗（${err.code || err.message}），僅能單機使用`);
-        const mapBtn = document.querySelector('.nav-btn[data-page="map"]');
-        if (mapBtn) mapBtn.classList.remove('disabled');
+        updateStatus(`匿名登入失敗（${err.code || err.message}），請重新整理頁面再試一次`);
       });
 
       renderRoster();
@@ -625,21 +603,9 @@
     function updateHostUI() {
       const startBtn = document.getElementById('host-start-btn');
       const waitMsg = document.getElementById('wait-host-msg');
-      const mapBtn = document.querySelector('.nav-btn[data-page="map"]');
 
       if (startBtn) startBtn.style.display = (isHost && roomPhase === 'lobby') ? 'flex' : 'none';
       if (waitMsg) waitMsg.style.display = (!isHost && roomPhase === 'lobby') ? 'block' : 'none';
-
-      if (!mapBtn) return;
-      if (myMapDone) {
-        mapBtn.style.display = 'none';
-      } else if (roomPhase === 'started') {
-        mapBtn.style.display = '';
-        mapBtn.classList.remove('disabled');
-      } else {
-        mapBtn.style.display = '';
-        mapBtn.classList.add('disabled');
-      }
     }
 
     function startGame() {
