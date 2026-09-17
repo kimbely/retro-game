@@ -222,6 +222,7 @@
     .prompt-cat-label { font-size: 0.75rem; color: var(--accent-yellow); margin-bottom: 8px; }
     .prompt-answer-wrap { margin-bottom: 10px; }
     .prompt-answer-wrap input { width: 100%; padding: 10px; background: #111; border: 2px solid #6272a4; color: #fff; font-size: 16px; }
+    .prompt-answer-wrap select { width: 100%; padding: 8px; background: #111; border: 2px solid #6272a4; color: var(--accent-cyan); font-size: 15px; }
     .prompt-panel .prompt-actions { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
 
     .finish-panel { display: none; background: #1e2b22; border: 2px solid var(--accent-green); padding: 12px; margin-top: 12px; text-align: center; }
@@ -261,15 +262,18 @@
     .card-ref { font-size: 0.75rem; color: var(--accent-cyan); margin-top: 6px; background: rgba(139,233,253,0.08); padding: 4px 6px; border-radius: 3px; }
     .voter-list { font-size: 0.72rem; color: #b3b6c9; margin-top: 6px; font-style: italic; }
     .card-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; gap: 6px; flex-wrap: wrap; }
-    .group-btn { background: #191a21; border: 1px solid #6272a4; color: var(--accent-cyan); padding: 4px 8px; font-size: 0.78rem; cursor: pointer; border-radius: 3px; white-space: nowrap; }
+    .group-select { background: #191a21; border: 1px solid #6272a4; color: var(--accent-cyan); padding: 4px 6px; font-size: 0.78rem; cursor: pointer; border-radius: 3px; max-width: 130px; }
     .vote-btn { background: #191a21; border: 1px solid #6272a4; color: var(--text-color); padding: 4px 10px; font-size: 0.85rem; cursor: pointer; }
     .vote-btn.voted { background: #3a2b36; border-color: var(--accent-pink); color: var(--accent-pink); }
     .vote-btn:disabled { opacity: 0.35; cursor: not-allowed; }
     .del-btn { color: var(--accent-red); font-size: 0.85rem; padding: 4px; cursor: pointer; }
 
-    .card-group { border: 2px dashed #6272a4; border-radius: 6px; padding: 8px 8px 2px; margin-bottom: 12px; background: rgba(98, 114, 164, 0.1); }
+    .card-group { border: 3px solid #6272a4; border-radius: 8px; padding: 10px 10px 2px; margin-bottom: 14px; }
     .card-group .card { margin-bottom: 8px; }
-    .card-group-title { font-family: 'VT323', monospace; font-size: 1.05rem; color: var(--accent-cyan); margin-bottom: 6px; }
+    .card-group-title { font-family: 'VT323', monospace; font-size: 1.1rem; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+    .card-group-title .group-dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+    .card-group-title .group-count { font-size: 0.7rem; color: #9aa0b5; font-family: 'Noto Sans TC', sans-serif; }
+    .ungrouped-divider { text-align: center; font-size: 0.72rem; color: #6b6f8a; margin: 10px 0 6px; }
     .del-btn.disabled { opacity: 0.35; pointer-events: none; }
 
     .voting-setup { background: #282a36; border: 2px solid var(--accent-pink); padding: 12px; margin-bottom: 12px; }
@@ -378,6 +382,10 @@
         <div class="prompt-cat-label" id="prompt-cat-label" style="display:none;"></div>
         <div class="prompt-answer-wrap" id="prompt-answer-wrap" style="display:none;">
           <input type="text" id="prompt-answer-input" placeholder="輸入你的答案...">
+          <select id="prompt-group-picker" style="margin-top:6px;">
+            <option value="">（未分組）</option>
+            <option value="__new__">➕ 新增群組...</option>
+          </select>
         </div>
         <div class="prompt-actions">
           <button class="pixel-btn yellow" onclick="rerollPrompt()">🔄 換一題</button>
@@ -434,6 +442,11 @@
         <div class="field-label">🔗 這個行動方案是為了解決/延續哪一張？（可不選）</div>
         <select id="ref-picker"><option value="">（不指定）</option></select>
       </div>
+      <div class="field-label">🏷️ 分組（可不選）</div>
+      <select id="group-picker">
+        <option value="">（未分組）</option>
+        <option value="__new__">➕ 新增群組...</option>
+      </select>
       <input type="text" id="card-text" placeholder="輸入想法... (輸入完點新增同步給全體)">
       <button class="pixel-btn green full" onclick="addCard()">➕ 新增便利貼</button>
     </div>
@@ -1048,6 +1061,7 @@
       const submitBtn = document.getElementById('prompt-submit-btn');
       const doneBtn = document.getElementById('prompt-done-btn');
       const skipLink = document.getElementById('prompt-skip-link');
+      const groupSel = document.getElementById('prompt-group-picker');
 
       if (answerInput) answerInput.value = '';
 
@@ -1057,6 +1071,7 @@
         if (submitBtn) submitBtn.style.display = 'inline-flex';
         if (doneBtn) doneBtn.style.display = 'none';
         if (skipLink) skipLink.style.display = 'inline';
+        if (groupSel) groupSel.innerHTML = groupOptionsHtmlForType(cat, '');
       } else {
         if (catLabel) catLabel.style.display = 'none';
         if (answerWrap) answerWrap.style.display = 'none';
@@ -1096,7 +1111,18 @@
 
       const cat = currentPromptCategory();
       if (cat) {
-        const payload = { type: cat, text, voters: [], author: myName || '匿名玩家', group: '', ts: Date.now(), refCardId: null };
+        const groupSel = document.getElementById('prompt-group-picker');
+        let groupName = '';
+        if (groupSel) {
+          if (groupSel.value === '__new__') {
+            const name = prompt('幫這個新群組取個名字：');
+            groupName = (name || '').trim();
+          } else {
+            groupName = groupSel.value;
+          }
+        }
+
+        const payload = { type: cat, text, voters: [], author: myName || '匿名玩家', group: groupName, ts: Date.now(), refCardId: null };
         if (cardsRef) {
           const id = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
           cardsRef.doc(id).set(payload).catch(reportWriteError);
@@ -1237,6 +1263,26 @@
       const wrap = document.getElementById('ref-picker-wrap');
       if (wrap) wrap.style.display = (type === 'equip') ? 'block' : 'none';
       if (type === 'equip') renderRefPicker();
+      renderGroupPicker();
+    }
+
+    function groupOptionsHtmlForType(type, selectedValue) {
+      const existingGroups = Array.from(new Set(cards.filter(c => c.type === type && c.group).map(c => c.group)));
+      let html = `<option value="" ${!selectedValue ? 'selected' : ''}>（未分組）</option>`;
+      existingGroups.forEach(g => {
+        html += `<option value="${escapeHtml(g)}" ${selectedValue === g ? 'selected' : ''}>🔗 ${escapeHtml(g)}</option>`;
+      });
+      html += `<option value="__new__">➕ 新增群組...</option>`;
+      return html;
+    }
+
+    function renderGroupPicker() {
+      const typeSel = document.getElementById('card-type');
+      const groupSel = document.getElementById('group-picker');
+      if (!typeSel || !groupSel) return;
+      const type = typeSel.value;
+      const prevValue = groupSel.value === '__new__' ? '' : groupSel.value;
+      groupSel.innerHTML = groupOptionsHtmlForType(type, prevValue);
     }
 
     function renderRefPicker() {
@@ -1261,7 +1307,19 @@
 
       const refSel = document.getElementById('ref-picker');
       const refCardId = (type === 'equip' && refSel && refSel.value) ? refSel.value : null;
-      const payload = { type, text, voters: [], author: myName || '匿名玩家', group: '', ts: Date.now(), refCardId };
+
+      const groupSel = document.getElementById('group-picker');
+      let groupName = '';
+      if (groupSel) {
+        if (groupSel.value === '__new__') {
+          const name = prompt('幫這個新群組取個名字：');
+          groupName = (name || '').trim();
+        } else {
+          groupName = groupSel.value;
+        }
+      }
+
+      const payload = { type, text, voters: [], author: myName || '匿名玩家', group: groupName, ts: Date.now(), refCardId };
 
       if (cardsRef) {
         const id = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
@@ -1272,6 +1330,7 @@
       }
       input.value = '';
       if (refSel) refSel.value = '';
+      if (groupSel) groupSel.value = '';
 
       if (window.innerWidth < 768) switchTab(type);
     }
@@ -1302,7 +1361,7 @@
       }
     }
 
-    function renderSingleCardEl(card, voteLocked, tagMap) {
+    function renderSingleCardEl(card, voteLocked, tagMap, existingGroupsForType) {
       const cardEl = document.createElement('div');
       cardEl.className = 'card';
 
@@ -1326,6 +1385,12 @@
         ? `<div class="voter-list">* ${voterNames.join('、')} 按了讚</div>`
         : '';
 
+      let groupOptions = `<option value="" ${!card.group ? 'selected' : ''}>（未分組）</option>`;
+      existingGroupsForType.forEach(g => {
+        groupOptions += `<option value="${escapeHtml(g)}" ${card.group === g ? 'selected' : ''}>🔗 ${escapeHtml(g)}</option>`;
+      });
+      groupOptions += `<option value="__new__">➕ 新增群組...</option>`;
+
       cardEl.innerHTML = `
         <div class="card-tag">#${tag}</div>
         <div class="card-author-name">${authorName}：</div>
@@ -1333,7 +1398,7 @@
         ${refLine}
         <div class="card-footer">
           <button class="vote-btn ${voted ? 'voted' : ''}" ${(voteLocked && !voted) ? 'disabled' : ''} onclick="voteCard('${card.id}')">❤️ ${voters.length}</button>
-          <span class="group-btn" onclick="assignGroup('${card.id}')">🔗 分組</span>
+          <select class="group-select" onchange="onGroupSelectChange('${card.id}', this)">${groupOptions}</select>
           <span class="del-btn" onclick="deleteCard('${card.id}')">刪除</span>
         </div>
         ${voterLine}
@@ -1352,6 +1417,7 @@
       ['gold', 'trap', 'potion', 'equip'].forEach(type => {
         const container = document.getElementById(`list-${type}`);
         const typeCards = cards.filter(c => c.type === type);
+        const existingGroupsForType = Array.from(new Set(typeCards.filter(c => c.group).map(c => c.group)));
 
         const groups = {};
         const ungrouped = [];
@@ -1367,42 +1433,49 @@
         Object.keys(groups).forEach(groupName => {
           const groupEl = document.createElement('div');
           groupEl.className = 'card-group';
-          groupEl.innerHTML = `<div class="card-group-title">🔗 ${escapeHtml(groupName)}</div>`;
+          const color = colorForId(groupName);
+          groupEl.style.borderColor = color;
+          groupEl.style.background = color + '1a'; // 加上透明度做淡底色
+          groupEl.innerHTML = `<div class="card-group-title"><span class="group-dot" style="background:${color};"></span>${escapeHtml(groupName)} <span class="group-count">（${groups[groupName].length} 張）</span></div>`;
           groups[groupName].forEach(card => {
-            groupEl.appendChild(renderSingleCardEl(card, voteLocked, tagMap));
+            groupEl.appendChild(renderSingleCardEl(card, voteLocked, tagMap, existingGroupsForType));
           });
           container.appendChild(groupEl);
         });
 
+        if (Object.keys(groups).length > 0 && ungrouped.length > 0) {
+          const divider = document.createElement('div');
+          divider.className = 'ungrouped-divider';
+          divider.innerText = '－ 未分組 －';
+          container.appendChild(divider);
+        }
+
         ungrouped.forEach(card => {
-          container.appendChild(renderSingleCardEl(card, voteLocked, tagMap));
+          container.appendChild(renderSingleCardEl(card, voteLocked, tagMap, existingGroupsForType));
         });
       });
 
       const typeSel = document.getElementById('card-type');
       if (typeSel && typeSel.value === 'equip') renderRefPicker();
+      renderGroupPicker();
     }
 
-    function assignGroup(id) {
-      const card = cards.find(c => String(c.id) === String(id));
-      if (!card) return;
-
-      const existingGroups = Array.from(new Set(
-        cards.filter(c => c.type === card.type && c.group).map(c => c.group)
-      ));
-      let msg = '輸入群組名稱（相同名稱的便利貼會自動排在一起，留空可取消分組）：';
-      if (existingGroups.length) {
-        msg += `\n\n目前已有的群組：${existingGroups.join('、')}`;
-      }
-      const name = prompt(msg, card.group || '');
-      if (name === null) return; // 取消輸入
-      const trimmed = name.trim();
-
-      if (cardsRef) {
-        cardsRef.doc(String(id)).update({ group: trimmed }).catch(reportWriteError);
+    function onGroupSelectChange(id, selectEl) {
+      if (selectEl.value === '__new__') {
+        const name = prompt('幫這個新群組取個名字：');
+        if (name === null) { renderCards(); return; } // 取消時還原選單顯示
+        applyGroup(id, name.trim());
       } else {
-        card.group = trimmed;
-        renderCards();
+        applyGroup(id, selectEl.value);
+      }
+    }
+
+    function applyGroup(id, groupName) {
+      if (cardsRef) {
+        cardsRef.doc(String(id)).update({ group: groupName }).catch(reportWriteError);
+      } else {
+        const card = cards.find(c => String(c.id) === String(id));
+        if (card) { card.group = groupName; renderCards(); }
       }
     }
 
