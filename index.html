@@ -248,14 +248,32 @@
     .col-potion h2 { color: var(--accent-cyan); }
     .col-equip h2 { color: var(--accent-green); }
 
-    .card { background: #2e303e; border-left: 4px solid #fff; padding: 10px; margin-bottom: 10px; word-break: break-word; font-size: 0.95rem; }
+    .card { background: #2e303e; border-left: 4px solid #fff; padding: 10px; margin-bottom: 10px; word-break: break-word; font-size: 0.95rem; position: relative; }
     .col-gold .card { border-left-color: var(--accent-yellow); }
     .col-trap .card { border-left-color: var(--accent-red); }
     .col-potion .card { border-left-color: var(--accent-cyan); }
     .col-equip .card { border-left-color: var(--accent-green); }
-    .card-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
+    .card-tag {
+      position: absolute; top: 6px; right: 8px;
+      font-family: 'VT323', monospace; font-size: 0.85rem; color: #6b6f8a;
+    }
+    .card-author-name { font-weight: bold; color: var(--accent-yellow); font-size: 0.85rem; margin-bottom: 2px; }
+    .card-ref { font-size: 0.75rem; color: var(--accent-cyan); margin-top: 6px; background: rgba(139,233,253,0.08); padding: 4px 6px; border-radius: 3px; }
+    .voter-list { font-size: 0.72rem; color: #b3b6c9; margin-top: 6px; font-style: italic; }
+    .card-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; gap: 6px; flex-wrap: wrap; }
+    .group-btn { background: #191a21; border: 1px solid #6272a4; color: var(--accent-cyan); padding: 4px 8px; font-size: 0.78rem; cursor: pointer; border-radius: 3px; white-space: nowrap; }
     .vote-btn { background: #191a21; border: 1px solid #6272a4; color: var(--text-color); padding: 4px 10px; font-size: 0.85rem; cursor: pointer; }
+    .vote-btn.voted { background: #3a2b36; border-color: var(--accent-pink); color: var(--accent-pink); }
+    .vote-btn:disabled { opacity: 0.35; cursor: not-allowed; }
     .del-btn { color: var(--accent-red); font-size: 0.85rem; padding: 4px; cursor: pointer; }
+
+    .card-group { border: 2px dashed #6272a4; border-radius: 6px; padding: 8px 8px 2px; margin-bottom: 12px; background: rgba(98, 114, 164, 0.1); }
+    .card-group .card { margin-bottom: 8px; }
+    .card-group-title { font-family: 'VT323', monospace; font-size: 1.05rem; color: var(--accent-cyan); margin-bottom: 6px; }
+    .del-btn.disabled { opacity: 0.35; pointer-events: none; }
+
+    .voting-setup { background: #282a36; border: 2px solid var(--accent-pink); padding: 12px; margin-bottom: 12px; }
+    .voting-setup input { padding: 8px; background: #111; border: 2px solid #6272a4; color: #fff; font-size: 16px; }
 
     @media (min-width: 768px) {
       .mobile-tabs { display: none; }
@@ -393,13 +411,29 @@
       </div>
     </div>
 
+    <div class="voting-setup" id="voting-setup">
+      <div style="font-weight: bold; color: var(--accent-pink);">🗳️ 投票設定（房主）</div>
+      <div class="net-row">
+        <span style="align-self:center; font-size:0.85rem;">每人可投</span>
+        <input type="number" id="votes-per-person-input" min="1" max="10" value="3" style="max-width:70px;">
+        <span style="align-self:center; font-size:0.85rem;">票</span>
+        <button class="pixel-btn green" onclick="startVoting()">開始投票</button>
+      </div>
+    </div>
+    <div class="net-status" id="voting-wait-msg" style="display:none;">⏳ 便利貼寫完後，等待房主開始投票...</div>
+    <div class="net-status" id="voting-budget-msg" style="display:none;"></div>
+
     <div class="input-section">
-      <select id="card-type">
+      <select id="card-type" onchange="onCardTypeChange()">
         <option value="gold">🪙 金幣寶箱 (做得好的亮點)</option>
         <option value="trap">👾 泥濘陷阱 (踩到的坑/阻礙)</option>
         <option value="potion">🧪 補血藥水 (感謝隊友/Shout-out)</option>
         <option value="equip">⚔️ 新裝備 (下期行動方案)</option>
       </select>
+      <div id="ref-picker-wrap" style="display:none;">
+        <div class="field-label">🔗 這個行動方案是為了解決/延續哪一張？（可不選）</div>
+        <select id="ref-picker"><option value="">（不指定）</option></select>
+      </div>
       <input type="text" id="card-text" placeholder="輸入想法... (輸入完點新增同步給全體)">
       <button class="pixel-btn green full" onclick="addCard()">➕ 新增便利貼</button>
     </div>
@@ -491,6 +525,8 @@
     let answeredIds = [];
     let pendingPromptForMe = false;
     let currentPromptTileIndex = null;
+    let votingActive = false;
+    let votesPerPerson = 3;
 
     function updateStatus(msg) {
       document.getElementById('net-status').innerText = "目前狀態：" + msg;
@@ -587,6 +623,7 @@
       });
 
       renderRoster();
+      updateVotingUI();
     }
 
     async function enterRoom() {
@@ -654,8 +691,18 @@
         turnOrder = Array.isArray(data.turnOrder) ? data.turnOrder : [];
         currentTurnIndex = typeof data.currentTurnIndex === 'number' ? data.currentTurnIndex : 0;
         answeredIds = Array.isArray(data.answeredIds) ? data.answeredIds : [];
+        const voting = data.voting || {};
+        votingActive = !!voting.active;
+        votesPerPerson = typeof voting.perPerson === 'number' ? voting.perPerson : 3;
+        const timer = data.timer || {};
+        timerRunning = !!timer.running;
+        timerEndAt = typeof timer.endAt === 'number' ? timer.endAt : null;
+        timerRemainingMs = typeof timer.remainingMs === 'number' ? timer.remainingMs : 300000;
+        timerDuration = typeof timer.duration === 'number' ? timer.duration : 300000;
+        syncTimerFromRoom();
         updateHostUI();
         updateTurnUI();
+        updateVotingUI();
         if (prevPhase !== 'started' && roomPhase === 'started') {
           onGameStarted();
         }
@@ -700,6 +747,7 @@
         renderRoster();
         updateHostUI();
         updateTurnUI();
+        updateVotingUI();
       }, (err) => {
         showGlobalError(`隊友狀態同步發生問題（${err.code || err.message}），請重新輸入房間號碼再試一次。`);
       });
@@ -1048,11 +1096,12 @@
 
       const cat = currentPromptCategory();
       if (cat) {
+        const payload = { type: cat, text, voters: [], author: myName || '匿名玩家', group: '', ts: Date.now(), refCardId: null };
         if (cardsRef) {
           const id = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
-          cardsRef.doc(id).set({ type: cat, text, votes: 0 }).catch(reportWriteError);
+          cardsRef.doc(id).set(payload).catch(reportWriteError);
         } else {
-          cards.push({ id: String(Date.now()), type: cat, text, votes: 0 });
+          cards.push({ id: String(Date.now()), ...payload });
           renderCards();
         }
       }
@@ -1071,6 +1120,46 @@
       const newAnswered = answeredIds.includes(myId) ? answeredIds.slice() : answeredIds.concat([myId]);
       const nextIndex = (currentTurnIndex + 1) % turnOrder.length;
       roomDocRef.update({ currentTurnIndex: nextIndex, answeredIds: newAnswered }).catch(reportWriteError);
+    }
+
+    function startVoting() {
+      if (!roomDocRef || !isHost) return;
+      const input = document.getElementById('votes-per-person-input');
+      const n = Math.max(1, Math.min(10, parseInt(input && input.value, 10) || 3));
+      roomDocRef.update({ voting: { active: true, perPerson: n } }).catch(reportWriteError);
+    }
+
+    function myVotesUsed() {
+      return cards.filter(c => Array.isArray(c.voters) && c.voters.some(v => v.id === myId)).length;
+    }
+
+    function updateVotingUI() {
+      const setupPanel = document.getElementById('voting-setup');
+      const waitMsg = document.getElementById('voting-wait-msg');
+      const budgetMsg = document.getElementById('voting-budget-msg');
+      if (!setupPanel || !waitMsg || !budgetMsg) return;
+
+      if (!cardsRef) {
+        // 單機模式：不套用票數限制
+        setupPanel.style.display = 'none';
+        waitMsg.style.display = 'none';
+        budgetMsg.style.display = 'none';
+        renderCards();
+        return;
+      }
+
+      if (!votingActive) {
+        setupPanel.style.display = isHost ? 'block' : 'none';
+        waitMsg.style.display = isHost ? 'none' : 'block';
+        budgetMsg.style.display = 'none';
+      } else {
+        setupPanel.style.display = 'none';
+        waitMsg.style.display = 'none';
+        const remaining = Math.max(0, votesPerPerson - myVotesUsed());
+        budgetMsg.style.display = 'block';
+        budgetMsg.innerText = `🗳️ 你還剩 ${remaining} / ${votesPerPerson} 票，點便利貼上的 👍 投票`;
+      }
+      renderCards();
     }
 
     function hostAdvanceToBoard() {
@@ -1132,32 +1221,74 @@
       }
     }
 
+    const BOARD_TAG_PREFIX = { gold: 'G', trap: 'T', potion: 'P', equip: 'E' };
+
+    function computeAllTags() {
+      const map = {};
+      ['gold', 'trap', 'potion', 'equip'].forEach(type => {
+        const sorted = cards.filter(c => c.type === type).slice().sort((a, b) => (a.ts || 0) - (b.ts || 0));
+        sorted.forEach((c, i) => { map[c.id] = `${BOARD_TAG_PREFIX[type]}${i + 1}`; });
+      });
+      return map;
+    }
+
+    function onCardTypeChange() {
+      const type = document.getElementById('card-type').value;
+      const wrap = document.getElementById('ref-picker-wrap');
+      if (wrap) wrap.style.display = (type === 'equip') ? 'block' : 'none';
+      if (type === 'equip') renderRefPicker();
+    }
+
+    function renderRefPicker() {
+      const sel = document.getElementById('ref-picker');
+      if (!sel) return;
+      const prevValue = sel.value;
+      const tagMap = computeAllTags();
+      const candidates = cards.filter(c => c.type === 'gold' || c.type === 'trap');
+      sel.innerHTML = '<option value="">（不指定）</option>' + candidates.map(c => {
+        const tag = tagMap[c.id] || '?';
+        const preview = c.text.length > 20 ? c.text.slice(0, 20) + '…' : c.text;
+        return `<option value="${c.id}">[${tag}] ${escapeHtml(preview)}</option>`;
+      }).join('');
+      if (candidates.some(c => c.id === prevValue)) sel.value = prevValue;
+    }
+
     function addCard() {
       const type = document.getElementById('card-type').value;
       const input = document.getElementById('card-text');
       const text = input.value.trim();
       if (!text) return;
 
+      const refSel = document.getElementById('ref-picker');
+      const refCardId = (type === 'equip' && refSel && refSel.value) ? refSel.value : null;
+      const payload = { type, text, voters: [], author: myName || '匿名玩家', group: '', ts: Date.now(), refCardId };
+
       if (cardsRef) {
         const id = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
-        cardsRef.doc(id).set({ type, text, votes: 0 }).catch(reportWriteError);
+        cardsRef.doc(id).set(payload).catch(reportWriteError);
       } else {
-        cards.push({ id: String(Date.now()), type, text, votes: 0 });
+        cards.push({ id: String(Date.now()), ...payload });
         renderCards();
       }
       input.value = '';
+      if (refSel) refSel.value = '';
 
       if (window.innerWidth < 768) switchTab(type);
     }
 
     function voteCard(id) {
+      const card = cards.find(c => String(c.id) === String(id));
+      if (!card) return;
+      const voters = Array.isArray(card.voters) ? card.voters.slice() : [];
+      const already = voters.some(v => v.id === myId);
+
       if (cardsRef) {
-        const card = cards.find(c => String(c.id) === String(id));
-        const currentVotes = card ? (card.votes || 0) : 0;
-        cardsRef.doc(String(id)).update({ votes: currentVotes + 1 }).catch(reportWriteError);
+        if (!votingActive) { alert('投票尚未開始，請等待房主設定並開始投票。'); return; }
+        if (!already && myVotesUsed() >= votesPerPerson) { alert('你的票數已經用完囉！'); return; }
+        const updated = already ? voters.filter(v => v.id !== myId) : voters.concat([{ id: myId, name: myName || '匿名玩家' }]);
+        cardsRef.doc(String(id)).update({ voters: updated }).catch(reportWriteError);
       } else {
-        const c = cards.find(x => String(x.id) === String(id));
-        if (c) c.votes += 1;
+        card.voters = already ? voters.filter(v => v.id !== myId) : voters.concat([{ id: myId, name: myName || '你' }]);
         renderCards();
       }
     }
@@ -1171,26 +1302,108 @@
       }
     }
 
+    function renderSingleCardEl(card, voteLocked, tagMap) {
+      const cardEl = document.createElement('div');
+      cardEl.className = 'card';
+
+      const tag = tagMap[card.id] || '?';
+      const authorName = escapeHtml(card.author || '匿名玩家');
+
+      let refLine = '';
+      if (card.refCardId) {
+        const refCard = cards.find(c => c.id === card.refCardId);
+        if (refCard) {
+          const refTag = tagMap[refCard.id] || '?';
+          const refPreview = refCard.text.length > 24 ? refCard.text.slice(0, 24) + '…' : refCard.text;
+          refLine = `<div class="card-ref">🔗 回應 [${refTag}] ${escapeHtml(refPreview)}</div>`;
+        }
+      }
+
+      const voters = Array.isArray(card.voters) ? card.voters : [];
+      const voted = voters.some(v => v.id === myId);
+      const voterNames = voters.map(v => escapeHtml(v.name || '匿名玩家'));
+      const voterLine = voterNames.length
+        ? `<div class="voter-list">* ${voterNames.join('、')} 按了讚</div>`
+        : '';
+
+      cardEl.innerHTML = `
+        <div class="card-tag">#${tag}</div>
+        <div class="card-author-name">${authorName}：</div>
+        <div>${escapeHtml(card.text)}</div>
+        ${refLine}
+        <div class="card-footer">
+          <button class="vote-btn ${voted ? 'voted' : ''}" ${(voteLocked && !voted) ? 'disabled' : ''} onclick="voteCard('${card.id}')">❤️ ${voters.length}</button>
+          <span class="group-btn" onclick="assignGroup('${card.id}')">🔗 分組</span>
+          <span class="del-btn" onclick="deleteCard('${card.id}')">刪除</span>
+        </div>
+        ${voterLine}
+      `;
+      return cardEl;
+    }
+
     function renderCards() {
       ['gold', 'trap', 'potion', 'equip'].forEach(type => {
         document.getElementById(`list-${type}`).innerHTML = '';
       });
 
-      cards.forEach(card => {
-        const container = document.getElementById(`list-${card.type}`);
-        if (!container) return;
+      const voteLocked = cardsRef && (!votingActive || myVotesUsed() >= votesPerPerson);
+      const tagMap = computeAllTags();
 
-        const cardEl = document.createElement('div');
-        cardEl.className = 'card';
-        cardEl.innerHTML = `
-          <div>${escapeHtml(card.text)}</div>
-          <div class="card-footer">
-            <button class="vote-btn" onclick="voteCard('${card.id}')">👍 ${card.votes || 0}</button>
-            <span class="del-btn" onclick="deleteCard('${card.id}')">刪除</span>
-          </div>
-        `;
-        container.appendChild(cardEl);
+      ['gold', 'trap', 'potion', 'equip'].forEach(type => {
+        const container = document.getElementById(`list-${type}`);
+        const typeCards = cards.filter(c => c.type === type);
+
+        const groups = {};
+        const ungrouped = [];
+        typeCards.forEach(c => {
+          if (c.group) {
+            if (!groups[c.group]) groups[c.group] = [];
+            groups[c.group].push(c);
+          } else {
+            ungrouped.push(c);
+          }
+        });
+
+        Object.keys(groups).forEach(groupName => {
+          const groupEl = document.createElement('div');
+          groupEl.className = 'card-group';
+          groupEl.innerHTML = `<div class="card-group-title">🔗 ${escapeHtml(groupName)}</div>`;
+          groups[groupName].forEach(card => {
+            groupEl.appendChild(renderSingleCardEl(card, voteLocked, tagMap));
+          });
+          container.appendChild(groupEl);
+        });
+
+        ungrouped.forEach(card => {
+          container.appendChild(renderSingleCardEl(card, voteLocked, tagMap));
+        });
       });
+
+      const typeSel = document.getElementById('card-type');
+      if (typeSel && typeSel.value === 'equip') renderRefPicker();
+    }
+
+    function assignGroup(id) {
+      const card = cards.find(c => String(c.id) === String(id));
+      if (!card) return;
+
+      const existingGroups = Array.from(new Set(
+        cards.filter(c => c.type === card.type && c.group).map(c => c.group)
+      ));
+      let msg = '輸入群組名稱（相同名稱的便利貼會自動排在一起，留空可取消分組）：';
+      if (existingGroups.length) {
+        msg += `\n\n目前已有的群組：${existingGroups.join('、')}`;
+      }
+      const name = prompt(msg, card.group || '');
+      if (name === null) return; // 取消輸入
+      const trimmed = name.trim();
+
+      if (cardsRef) {
+        cardsRef.doc(String(id)).update({ group: trimmed }).catch(reportWriteError);
+      } else {
+        card.group = trimmed;
+        renderCards();
+      }
     }
 
     function switchTab(type) {
@@ -1203,32 +1416,107 @@
       return String(text).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[m]);
     }
 
-    let timerInterval = null;
-    let timeLeft = 300;
-    function updateTimerDisplay() {
-      const mins = Math.floor(timeLeft / 60).toString().padStart(2, '0');
-      const secs = (timeLeft % 60).toString().padStart(2, '0');
-      document.getElementById('timer').innerText = `${mins}:${secs}`;
+    // ----- 計時器（房間內同步：用絕對結束時間換算倒數，所有人看到同一個時間） -----
+    let timerRunning = false;
+    let timerEndAt = null;
+    let timerRemainingMs = 300000;
+    let timerDuration = 300000;
+    let timerTickInterval = null;
+    let timerAlertShown = false;
+
+    // 單機模式（沒有房間）用的本地計時器
+    let localTimerInterval = null;
+    let localTimeLeft = 300;
+
+    function computeTimerMsLeft() {
+      if (timerRunning && timerEndAt) return Math.max(0, timerEndAt - Date.now());
+      return Math.max(0, timerRemainingMs);
     }
-    function toggleTimer() {
-      if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
-      else {
-        timerInterval = setInterval(() => {
-          if (timeLeft > 0) { timeLeft--; updateTimerDisplay(); }
-          else { clearInterval(timerInterval); alert("⏰ 時間到！開始討論議題！"); }
-        }, 1000);
+
+    function renderTimerDisplay() {
+      const ms = computeTimerMsLeft();
+      const totalSec = Math.ceil(ms / 1000);
+      const mins = Math.floor(totalSec / 60).toString().padStart(2, '0');
+      const secs = (totalSec % 60).toString().padStart(2, '0');
+      const el = document.getElementById('timer');
+      if (el) el.innerText = `${mins}:${secs}`;
+
+      if (ms <= 0 && timerRunning && !timerAlertShown) {
+        timerAlertShown = true;
+        alert('⏰ 時間到！開始討論議題！');
+      }
+      if (ms > 0) timerAlertShown = false;
+    }
+
+    function syncTimerFromRoom() {
+      renderTimerDisplay();
+      if (timerTickInterval) { clearInterval(timerTickInterval); timerTickInterval = null; }
+      if (timerRunning) {
+        timerTickInterval = setInterval(renderTimerDisplay, 250);
       }
     }
-    function resetTimer() { clearInterval(timerInterval); timerInterval = null; timeLeft = 300; updateTimerDisplay(); }
+
+    function updateTimerDisplay() {
+      const mins = Math.floor(localTimeLeft / 60).toString().padStart(2, '0');
+      const secs = (localTimeLeft % 60).toString().padStart(2, '0');
+      const el = document.getElementById('timer');
+      if (el) el.innerText = `${mins}:${secs}`;
+    }
+
+    function toggleTimer() {
+      if (roomDocRef) {
+        if (timerRunning) {
+          const remaining = Math.max(0, (timerEndAt || Date.now()) - Date.now());
+          roomDocRef.update({ timer: { running: false, endAt: null, remainingMs: remaining, duration: timerDuration } }).catch(reportWriteError);
+        } else {
+          const remaining = timerRemainingMs > 0 ? timerRemainingMs : timerDuration;
+          const endAt = Date.now() + remaining;
+          roomDocRef.update({ timer: { running: true, endAt, remainingMs: remaining, duration: timerDuration } }).catch(reportWriteError);
+        }
+      } else {
+        if (localTimerInterval) { clearInterval(localTimerInterval); localTimerInterval = null; }
+        else {
+          localTimerInterval = setInterval(() => {
+            if (localTimeLeft > 0) { localTimeLeft--; updateTimerDisplay(); }
+            else { clearInterval(localTimerInterval); alert("⏰ 時間到！開始討論議題！"); }
+          }, 1000);
+        }
+      }
+    }
+
+    function resetTimer() {
+      if (roomDocRef) {
+        roomDocRef.update({ timer: { running: false, endAt: null, remainingMs: timerDuration, duration: timerDuration } }).catch(reportWriteError);
+      } else {
+        clearInterval(localTimerInterval);
+        localTimerInterval = null;
+        localTimeLeft = 300;
+        updateTimerDisplay();
+      }
+    }
 
     function generateMarkdownText() {
       let md = `# 🎮 Sprint Retrospective 紀錄 (${new Date().toLocaleDateString()})\n\n`;
       const categories = { gold: "🪙 金幣寶箱 (Highlights)", trap: "👾 泥濘陷阱 (Obstacles)", potion: "🧪 補血藥水 (Shout-outs)", equip: "⚔️ 新裝備 (Action Items)" };
+      const tagMap = computeAllTags();
       Object.keys(categories).forEach(type => {
         md += `### ${categories[type]}\n`;
         const items = cards.filter(c => c.type === type);
-        if (items.length === 0) md += `- *(無)*\n`;
-        else items.forEach(i => { md += `- ${i.text} (贊同數: ${i.votes})\n`; });
+        if (items.length === 0) {
+          md += `- *(無)*\n`;
+        } else {
+          items.forEach(i => {
+            const tag = tagMap[i.id] || '?';
+            const voters = Array.isArray(i.voters) ? i.voters : [];
+            const voterNames = voters.map(v => v.name || '匿名玩家').join('、');
+            let line = `- [${tag}] ${i.text}（${i.author || '匿名玩家'}）(讚: ${voters.length}${voterNames ? ' - ' + voterNames : ''})`;
+            if (i.refCardId) {
+              const refCard = cards.find(c => c.id === i.refCardId);
+              if (refCard) line += ` — 回應 [${tagMap[refCard.id] || '?'}] ${refCard.text}`;
+            }
+            md += line + `\n`;
+          });
+        }
         md += `\n`;
       });
       return md;
