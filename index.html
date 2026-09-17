@@ -274,6 +274,8 @@
     .card-group-title .group-dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
     .card-group-title .group-count { font-size: 0.7rem; color: #9aa0b5; font-family: 'Noto Sans TC', sans-serif; }
     .ungrouped-divider { text-align: center; font-size: 0.72rem; color: #6b6f8a; margin: 10px 0 6px; }
+    .view-toggle-row { margin-bottom: 12px; }
+    .card-cat-badge { display: inline-block; font-size: 0.68rem; color: #9aa0b5; background: rgba(255,255,255,0.06); padding: 2px 6px; border-radius: 3px; margin-bottom: 6px; }
     .del-btn.disabled { opacity: 0.35; pointer-events: none; }
 
     .voting-setup { background: #282a36; border: 2px solid var(--accent-pink); padding: 12px; margin-bottom: 12px; }
@@ -451,31 +453,39 @@
       <button class="pixel-btn green full" onclick="addCard()">➕ 新增便利貼</button>
     </div>
 
-    <div class="mobile-tabs">
-      <div class="tab-btn active" data-type="gold" onclick="switchTab('gold')">🪙 亮點</div>
-      <div class="tab-btn" data-type="trap" onclick="switchTab('trap')">👾 阻礙</div>
-      <div class="tab-btn" data-type="potion" onclick="switchTab('potion')">🧪 感謝</div>
-      <div class="tab-btn" data-type="equip" onclick="switchTab('equip')">⚔️ 行動</div>
+    <div class="view-toggle-row">
+      <button class="pixel-btn yellow" id="view-toggle-btn" onclick="toggleBoardView()">🔗 切換成依群組檢視</button>
     </div>
 
-    <div class="board-container">
-      <div class="column col-gold active-tab" id="col-gold">
-        <h2>🪙 金幣寶箱</h2>
-        <div id="list-gold"></div>
+    <div id="category-view">
+      <div class="mobile-tabs">
+        <div class="tab-btn active" data-type="gold" onclick="switchTab('gold')">🪙 亮點</div>
+        <div class="tab-btn" data-type="trap" onclick="switchTab('trap')">👾 阻礙</div>
+        <div class="tab-btn" data-type="potion" onclick="switchTab('potion')">🧪 感謝</div>
+        <div class="tab-btn" data-type="equip" onclick="switchTab('equip')">⚔️ 行動</div>
       </div>
-      <div class="column col-trap" id="col-trap">
-        <h2>👾 泥濘陷阱</h2>
-        <div id="list-trap"></div>
-      </div>
-      <div class="column col-potion" id="col-potion">
-        <h2>🧪 補血藥水</h2>
-        <div id="list-potion"></div>
-      </div>
-      <div class="column col-equip" id="col-equip">
-        <h2>⚔️ 新裝備</h2>
-        <div id="list-equip"></div>
+
+      <div class="board-container">
+        <div class="column col-gold active-tab" id="col-gold">
+          <h2>🪙 金幣寶箱</h2>
+          <div id="list-gold"></div>
+        </div>
+        <div class="column col-trap" id="col-trap">
+          <h2>👾 泥濘陷阱</h2>
+          <div id="list-trap"></div>
+        </div>
+        <div class="column col-potion" id="col-potion">
+          <h2>🧪 補血藥水</h2>
+          <div id="list-potion"></div>
+        </div>
+        <div class="column col-equip" id="col-equip">
+          <h2>⚔️ 新裝備</h2>
+          <div id="list-equip"></div>
+        </div>
       </div>
     </div>
+
+    <div id="grouped-view" style="display:none;"></div>
   </section>
 
   <script>
@@ -539,6 +549,7 @@
     let pendingPromptForMe = false;
     let currentPromptTileIndex = null;
     let votingActive = false;
+    let boardViewMode = 'category'; // 'category' 依分類欄位 | 'group' 依群組跨分類整合
     let votesPerPerson = 3;
 
     function updateStatus(msg) {
@@ -1267,7 +1278,8 @@
     }
 
     function groupOptionsHtmlForType(type, selectedValue) {
-      const existingGroups = Array.from(new Set(cards.filter(c => c.type === type && c.group).map(c => c.group)));
+      // 群組是跨分類的全域標籤，同名群組可以同時裝亮點/陷阱/行動方案等不同類型的卡片
+      const existingGroups = Array.from(new Set(cards.filter(c => c.group).map(c => c.group)));
       let html = `<option value="" ${!selectedValue ? 'selected' : ''}>（未分組）</option>`;
       existingGroups.forEach(g => {
         html += `<option value="${escapeHtml(g)}" ${selectedValue === g ? 'selected' : ''}>🔗 ${escapeHtml(g)}</option>`;
@@ -1406,18 +1418,95 @@
       return cardEl;
     }
 
+    function toggleBoardView() {
+      boardViewMode = boardViewMode === 'category' ? 'group' : 'category';
+      const btn = document.getElementById('view-toggle-btn');
+      const categoryEl = document.getElementById('category-view');
+      const groupedEl = document.getElementById('grouped-view');
+      if (btn) btn.innerText = boardViewMode === 'category' ? '🔗 切換成依群組檢視' : '📋 切換回依分類檢視';
+      if (categoryEl) categoryEl.style.display = boardViewMode === 'category' ? 'block' : 'none';
+      if (groupedEl) groupedEl.style.display = boardViewMode === 'group' ? 'block' : 'none';
+      renderCards();
+    }
+
+    const CARD_CAT_ICON = { gold: '🪙 亮點', trap: '👾 阻礙', potion: '🧪 感謝', equip: '⚔️ 行動' };
+
+    function renderGroupedView() {
+      const container = document.getElementById('grouped-view');
+      if (!container) return;
+      container.innerHTML = '';
+
+      const voteLocked = cardsRef && (!votingActive || myVotesUsed() >= votesPerPerson);
+      const tagMap = computeAllTags();
+      const allGroups = Array.from(new Set(cards.filter(c => c.group).map(c => c.group)));
+
+      const groups = {};
+      const ungrouped = [];
+      cards.forEach(c => {
+        if (c.group) {
+          if (!groups[c.group]) groups[c.group] = [];
+          groups[c.group].push(c);
+        } else {
+          ungrouped.push(c);
+        }
+      });
+
+      function appendWithCatBadge(card) {
+        const el = renderSingleCardEl(card, voteLocked, tagMap, allGroups);
+        const badge = document.createElement('div');
+        badge.className = 'card-cat-badge';
+        badge.innerText = CARD_CAT_ICON[card.type] || card.type;
+        el.insertBefore(badge, el.firstChild);
+        return el;
+      }
+
+      Object.keys(groups).forEach(groupName => {
+        const groupEl = document.createElement('div');
+        groupEl.className = 'card-group';
+        const color = colorForId(groupName);
+        groupEl.style.borderColor = color;
+        groupEl.style.background = color + '1a';
+        groupEl.innerHTML = `<div class="card-group-title"><span class="group-dot" style="background:${color};"></span>${escapeHtml(groupName)} <span class="group-count">（${groups[groupName].length} 張，跨分類）</span></div>`;
+        groups[groupName].forEach(card => {
+          groupEl.appendChild(appendWithCatBadge(card));
+        });
+        container.appendChild(groupEl);
+      });
+
+      if (Object.keys(groups).length > 0 && ungrouped.length > 0) {
+        const divider = document.createElement('div');
+        divider.className = 'ungrouped-divider';
+        divider.innerText = '－ 未分組 －';
+        container.appendChild(divider);
+      }
+
+      ungrouped.forEach(card => {
+        container.appendChild(appendWithCatBadge(card));
+      });
+
+      if (cards.length === 0) {
+        container.innerHTML = '<div class="roster-empty">尚無便利貼</div>';
+      }
+    }
+
     function renderCards() {
+      if (boardViewMode === 'group') {
+        renderGroupedView();
+        renderGroupPicker();
+        return;
+      }
+
       ['gold', 'trap', 'potion', 'equip'].forEach(type => {
         document.getElementById(`list-${type}`).innerHTML = '';
       });
 
       const voteLocked = cardsRef && (!votingActive || myVotesUsed() >= votesPerPerson);
       const tagMap = computeAllTags();
+      const allGroups = Array.from(new Set(cards.filter(c => c.group).map(c => c.group)));
 
       ['gold', 'trap', 'potion', 'equip'].forEach(type => {
         const container = document.getElementById(`list-${type}`);
         const typeCards = cards.filter(c => c.type === type);
-        const existingGroupsForType = Array.from(new Set(typeCards.filter(c => c.group).map(c => c.group)));
 
         const groups = {};
         const ungrouped = [];
@@ -1438,7 +1527,7 @@
           groupEl.style.background = color + '1a'; // 加上透明度做淡底色
           groupEl.innerHTML = `<div class="card-group-title"><span class="group-dot" style="background:${color};"></span>${escapeHtml(groupName)} <span class="group-count">（${groups[groupName].length} 張）</span></div>`;
           groups[groupName].forEach(card => {
-            groupEl.appendChild(renderSingleCardEl(card, voteLocked, tagMap, existingGroupsForType));
+            groupEl.appendChild(renderSingleCardEl(card, voteLocked, tagMap, allGroups));
           });
           container.appendChild(groupEl);
         });
@@ -1451,7 +1540,7 @@
         }
 
         ungrouped.forEach(card => {
-          container.appendChild(renderSingleCardEl(card, voteLocked, tagMap, existingGroupsForType));
+          container.appendChild(renderSingleCardEl(card, voteLocked, tagMap, allGroups));
         });
       });
 
