@@ -29,6 +29,17 @@
     header h1 { font-family: 'VT323', monospace; font-size: 1.8rem; color: var(--accent-green); line-height: 1.1; }
     header p { color: var(--accent-yellow); font-size: 0.85rem; margin-top: 4px; }
 
+    .global-error-banner {
+      display: none;
+      background: #4a1414;
+      border: 2px solid var(--accent-red);
+      color: #ffdede;
+      font-size: 0.82rem;
+      padding: 10px 12px;
+      margin-bottom: 12px;
+      border-radius: 6px;
+    }
+
     .main-nav { display: none; }
     .page { display: none; }
     .page.page-active { display: block; }
@@ -79,6 +90,7 @@
     }
     .roster-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; border: 1px solid rgba(0,0,0,0.4); flex-shrink: 0; }
     .roster-hearts { font-size: 0.7rem; color: #b3b6c9; }
+    .hp-heart.empty { filter: grayscale(1) brightness(0.55); opacity: 0.45; }
     .roster-empty { color: #888; font-size: 0.8rem; }
 
     .toolbar { display: flex; flex-direction: column; gap: 10px; background: var(--card-bg); padding: 12px; border: 2px solid #6272a4; margin-bottom: 15px; }
@@ -191,6 +203,27 @@
 
     #event-box { margin-top: 10px; color: var(--accent-cyan); font-size: 0.86rem; font-weight: bold; background: rgba(0,0,0,0.45); padding: 8px; border-left: 3px solid var(--accent-cyan); border-radius: 0 4px 4px 0; }
 
+    .turn-banner {
+      margin-top: 10px;
+      text-align: center;
+      font-family: 'VT323', monospace;
+      font-size: 1.1rem;
+      color: var(--accent-yellow);
+      background: rgba(0,0,0,0.4);
+      border: 2px dashed var(--accent-yellow);
+      padding: 6px;
+      border-radius: 4px;
+    }
+    #dice-btn.hidden-turn { display: none; }
+
+    .prompt-panel { display: none; background: #22242e; border: 2px solid var(--accent-cyan); padding: 14px; margin-top: 12px; text-align: center; }
+    .prompt-panel .prompt-title { font-weight: bold; color: var(--accent-cyan); }
+    .prompt-panel .prompt-text { margin: 10px 0; font-size: 0.95rem; line-height: 1.5; color: var(--text-color); }
+    .prompt-cat-label { font-size: 0.75rem; color: var(--accent-yellow); margin-bottom: 8px; }
+    .prompt-answer-wrap { margin-bottom: 10px; }
+    .prompt-answer-wrap input { width: 100%; padding: 10px; background: #111; border: 2px solid #6272a4; color: #fff; font-size: 16px; }
+    .prompt-panel .prompt-actions { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+
     .finish-panel { display: none; background: #1e2b22; border: 2px solid var(--accent-green); padding: 12px; margin-top: 12px; text-align: center; }
     .finish-panel .finish-title { font-weight: bold; color: var(--accent-green); font-size: 1rem; }
     .finish-panel .pixel-btn { margin-top: 8px; }
@@ -239,6 +272,8 @@
     <p>多人即時連線 Sprint 回顧會</p>
   </header>
 
+  <div class="global-error-banner" id="global-error-banner"></div>
+
   <section class="page page-active" id="page-join">
     <div class="howto-panel">
       <div class="howto-title">📖 使用步驟</div>
@@ -246,7 +281,8 @@
         <li>輸入你的暱稱，並建立或加入一組房間號碼</li>
         <li>在下方選擇你目前的血量狀態，等待其他人加入</li>
         <li>房主按下「開始遊戲」後，大家會一起進到地圖暖場</li>
-        <li>擲骰子走到終點後按「結束」，進到「看板」寫便利貼、投票、匯出紀錄</li>
+        <li>採輪流制：輪到你才能擲骰子，踩到格子會抽到一個話題，可以換題目，選好後回答完換下一位</li>
+        <li>每個人都至少輪過一次後，會出現「前往看板」按鈕，進去寫便利貼、投票、匯出紀錄</li>
       </ol>
     </div>
 
@@ -287,7 +323,12 @@
 
       <div class="host-controls">
         <button id="host-start-btn" class="pixel-btn green full" onclick="startGame()" style="display:none;">🎬 開始遊戲（房主）</button>
-        <div id="wait-host-msg" class="net-status" style="display:none;">⏳ 已加入，等待房主開始遊戲...</div>
+        <div id="wait-host-msg" class="net-status" style="display:none;">
+          ⏳ 已加入，等待房主開始遊戲...
+          <div style="margin-top:6px;">
+            <span style="text-decoration:underline; cursor:pointer; color:var(--accent-yellow);" onclick="claimHost()">找不到房主？點此接管</span>
+          </div>
+        </div>
       </div>
 
       <div class="qr-panel" id="qr-panel">
@@ -302,18 +343,32 @@
   <section class="page" id="page-map">
     <div class="game-board">
       <div class="board-head">
-        <span class="board-head-title">🎲 暖場地圖</span>
-        <button class="pixel-btn pink" onclick="rollDice()">🎲 擲骰子</button>
+        <span class="board-head-title">🎲 暖場地圖（輪流制）</span>
+        <button id="dice-btn" class="pixel-btn pink" onclick="rollDice()">🎲 擲骰子</button>
       </div>
-      <div id="event-box">點擊按鈕擲骰子，展開今日話題！</div>
+      <div class="turn-banner" id="turn-banner">連線中...</div>
+      <div id="event-box">輪到你的時候，點擊擲骰子開始！</div>
       <div class="map-wrap" id="map-wrap">
         <div id="trail-layer"></div>
         <div class="map-grid" id="map-grid"></div>
         <div class="avatars-layer" id="avatars-layer"></div>
       </div>
-      <div class="finish-panel" id="finish-panel">
-        <div class="finish-title">🏁 你抵達終點了！</div>
-        <button class="pixel-btn green" onclick="finishMap()">✅ 結束暖場，前往看板 →</button>
+
+      <div class="prompt-panel" id="prompt-panel" style="display:none;">
+        <div class="prompt-title">🎯 抽到的話題</div>
+        <div class="prompt-text" id="prompt-text"></div>
+        <div class="prompt-cat-label" id="prompt-cat-label" style="display:none;"></div>
+        <div class="prompt-answer-wrap" id="prompt-answer-wrap" style="display:none;">
+          <input type="text" id="prompt-answer-input" placeholder="輸入你的答案...">
+        </div>
+        <div class="prompt-actions">
+          <button class="pixel-btn yellow" onclick="rerollPrompt()">🔄 換一題</button>
+          <button class="pixel-btn green" id="prompt-submit-btn" onclick="submitPromptAnswer()" style="display:none;">✅ 送出答案，加入看板</button>
+          <button class="pixel-btn green" id="prompt-done-btn" onclick="confirmAnswered()" style="display:none;">✅ 回答完畢</button>
+        </div>
+        <div style="margin-top:6px;">
+          <span id="prompt-skip-link" style="display:none; text-decoration:underline; cursor:pointer; color:#aaa; font-size:0.75rem;" onclick="skipPromptAnswer()">只用講的，不寫進看板</span>
+        </div>
       </div>
     </div>
   </section>
@@ -393,16 +448,16 @@
 
     // 10 格地圖資料（在地圖上的相對百分比座標，繪出蜿蜒的探險路徑）
     const mapTiles = [
-      { name: "起點",   icon: "🚩", cat: "start",    prompt: "團隊準備就緒，開始本期 Retro！",                         x: 8,  y: 84 },
-      { name: "金幣箱", icon: "🪙", cat: "gold",     prompt: "【金幣】這個 Sprint 做得最順暢的一件事是什麼？",         x: 24, y: 66 },
-      { name: "沼澤",   icon: "👾", cat: "trap",     prompt: "【陷阱】哪裡最卡？拖慢了你的開發速度？",                 x: 16, y: 46 },
-      { name: "泉水",   icon: "🧪", cat: "potion",   prompt: "【補血】大聲感謝這期最神救援你的隊友！",                 x: 34, y: 36 },
-      { name: "寶箱怪", icon: "📦", cat: "surprise", prompt: "【突發】本期出現了什麼意料之外的 Bug 或插隊需求？",     x: 52, y: 50 },
-      { name: "鐵匠舖", icon: "⚔️", cat: "equip",    prompt: "【裝備】下期我們該引進什麼新工具或改善流程？",           x: 66, y: 32 },
-      { name: "無敵星", icon: "⭐", cat: "star",     prompt: "【無敵】團隊本次最值得驕傲的突破是什麼？",               x: 50, y: 16 },
-      { name: "毒菇",   icon: "🍄", cat: "neg",      prompt: "【負面】哪個溝通或對接環節讓你心累？",                   x: 68, y: 10 },
-      { name: "營火",   icon: "🔥", cat: "rest",     prompt: "【休息】用一個詞形容你這期的工作心情！",                 x: 84, y: 24 },
-      { name: "Boss房", icon: "👑", cat: "boss",     prompt: "【魔王戰】針對最多人投票的問題產出 Action Item！",       x: 92, y: 8 }
+      { name: "起點",   icon: "🚩", cat: "start",    board: null,      prompt: "團隊準備就緒，開始本期 Retro！",                         x: 8,  y: 84 },
+      { name: "金幣箱", icon: "🪙", cat: "gold",     board: "gold",    prompt: "【金幣】這個 Sprint 做得最順暢的一件事是什麼？",         x: 24, y: 66 },
+      { name: "沼澤",   icon: "👾", cat: "trap",     board: "trap",    prompt: "【陷阱】哪裡最卡？拖慢了你的開發速度？",                 x: 16, y: 46 },
+      { name: "泉水",   icon: "🧪", cat: "potion",   board: "potion",  prompt: "【補血】大聲感謝這期最神救援你的隊友！",                 x: 34, y: 36 },
+      { name: "寶箱怪", icon: "📦", cat: "surprise", board: "trap",    prompt: "【突發】本期出現了什麼意料之外的 Bug 或插隊需求？",     x: 52, y: 50 },
+      { name: "鐵匠舖", icon: "⚔️", cat: "equip",    board: "equip",   prompt: "【裝備】下期我們該引進什麼新工具或改善流程？",           x: 66, y: 32 },
+      { name: "無敵星", icon: "⭐", cat: "star",     board: "gold",    prompt: "【無敵】團隊本次最值得驕傲的突破是什麼？",               x: 50, y: 16 },
+      { name: "毒菇",   icon: "🍄", cat: "neg",      board: "trap",    prompt: "【負面】哪個溝通或對接環節讓你心累？",                   x: 68, y: 10 },
+      { name: "營火",   icon: "🔥", cat: "rest",     board: null,      prompt: "【休息】用一個詞形容你這期的工作心情！",                 x: 84, y: 24 },
+      { name: "Boss房", icon: "👑", cat: "boss",     board: "equip",   prompt: "【魔王戰】針對最多人投票的問題產出 Action Item！",       x: 92, y: 8 }
     ];
 
     const AVATAR_COLORS = ['#50fa7b', '#ff79c6', '#f1fa8c', '#8be9fd', '#ff5555', '#ffb86c'];
@@ -425,6 +480,11 @@
     let currentRoomCode = null;
     let isHost = false;
     let roomPhase = 'lobby';
+    let turnOrder = [];
+    let currentTurnIndex = 0;
+    let answeredIds = [];
+    let pendingPromptForMe = false;
+    let currentPromptTileIndex = null;
 
     function updateStatus(msg) {
       document.getElementById('net-status').innerText = "目前狀態：" + msg;
@@ -432,9 +492,18 @@
 
     function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 
+    function showGlobalError(msg) {
+      const banner = document.getElementById('global-error-banner');
+      if (banner) {
+        banner.innerText = '⚠️ ' + msg;
+        banner.style.display = 'block';
+      }
+      updateStatus(msg);
+    }
+
     function reportWriteError(err) {
       const code = err && err.code ? err.code : (err && err.message ? err.message : String(err));
-      updateStatus(`寫入同步資料失敗（${code}），請確認房間號碼是否正確，或重新整理頁面再試一次。`);
+      showGlobalError(`寫入同步資料失敗（${code}），請確認房間號碼是否正確，或重新整理頁面再試一次。`);
     }
 
     function colorForId(id) {
@@ -549,17 +618,43 @@
 
       document.getElementById('pre-connect-panel').style.display = 'none';
       document.getElementById('lobby-panel').style.display = 'block';
+
+      // 重新連進房間：先讀回自己原本的進度（血量/位置/是否完成），
+      // 避免用重新整理後歸零的本機變數覆寫掉已經存在的資料
+      try {
+        const mySnap = await playersRef.doc(myId).get();
+        if (mySnap.exists) {
+          const data = mySnap.data() || {};
+          myHearts = typeof data.hearts === 'number' && data.hearts > 0 ? data.hearts : myHearts;
+          currentPos = typeof data.pos === 'number' ? data.pos : currentPos;
+          myMapDone = !!data.mapDone;
+          document.querySelectorAll('.status-btn').forEach(btn => {
+            btn.classList.toggle('active', Number(btn.dataset.hearts) === myHearts);
+          });
+        }
+      } catch (e) {
+        reportWriteError(e);
+      }
+
       updateHostUI();
-      if (roomPhase === 'started') { onGameStarted(); }
+      if (roomPhase === 'finished') { onMapFinished(); }
+      else if (roomPhase === 'started') { onGameStarted(); }
 
       unsubRoomDoc = roomDocRef.onSnapshot((snap) => {
         const data = snap.exists ? snap.data() : { phase: 'lobby' };
         const prevPhase = roomPhase;
         roomPhase = data.phase || 'lobby';
         isHost = data.hostId === myId;
+        turnOrder = Array.isArray(data.turnOrder) ? data.turnOrder : [];
+        currentTurnIndex = typeof data.currentTurnIndex === 'number' ? data.currentTurnIndex : 0;
+        answeredIds = Array.isArray(data.answeredIds) ? data.answeredIds : [];
         updateHostUI();
+        updateTurnUI();
         if (prevPhase !== 'started' && roomPhase === 'started') {
           onGameStarted();
+        }
+        if (prevPhase !== 'finished' && roomPhase === 'finished') {
+          onMapFinished();
         }
       }, reportWriteError);
 
@@ -567,7 +662,7 @@
         cards = qsnap.docs.map(d => ({ id: d.id, ...(d.data() || {}) }));
         renderCards();
       }, (err) => {
-        updateStatus(`便利貼同步發生問題（${err.code || err.message}），請重新輸入房間號碼再試一次。`);
+        showGlobalError(`便利貼同步發生問題（${err.code || err.message}），請重新輸入房間號碼再試一次。`);
       });
 
       unsubPlayers = playersRef.onSnapshot((qsnap) => {
@@ -578,22 +673,29 @@
             name: data.name || '',
             hearts: data.hearts || 0,
             pos: typeof data.pos === 'number' ? data.pos : 0,
-            mapDone: !!data.mapDone
+            mapDone: !!data.mapDone,
+            ts: typeof data.ts === 'number' ? data.ts : 0
           };
         });
         const me = playerStatuses.find(p => p.id === myId);
         if (me) {
           myMapDone = !!me.mapDone;
           if (me.pos !== currentPos) {
-            animateMove(me.pos);
+            animateMove(me.pos).then(() => {
+              if (pendingPromptForMe) {
+                pendingPromptForMe = false;
+                showPromptPanel();
+              }
+            });
           } else {
             renderMap();
           }
         }
         renderRoster();
         updateHostUI();
+        updateTurnUI();
       }, (err) => {
-        updateStatus(`隊友狀態同步發生問題（${err.code || err.message}），請重新輸入房間號碼再試一次。`);
+        showGlobalError(`隊友狀態同步發生問題（${err.code || err.message}），請重新輸入房間號碼再試一次。`);
       });
 
       syncMyPlayerDoc();
@@ -610,13 +712,30 @@
 
     function startGame() {
       if (!roomDocRef || !isHost) return;
-      roomDocRef.set({ hostId: myId, phase: 'started' }).catch(reportWriteError);
+      const order = playerStatuses.slice().sort((a, b) => (a.ts || 0) - (b.ts || 0)).map(p => p.id);
+      roomDocRef.set({
+        hostId: myId,
+        phase: 'started',
+        turnOrder: order.length ? order : [myId],
+        currentTurnIndex: 0,
+        answeredIds: []
+      }).catch(reportWriteError);
+    }
+
+    function claimHost() {
+      if (!roomDocRef || !myId) return;
+      if (!confirm("確定要接管成為這個房間的房主嗎？（適用於原本的房主身份已經失效、卡在等待畫面的情況）")) return;
+      roomDocRef.set({
+        hostId: myId,
+        phase: roomPhase,
+        turnOrder: turnOrder,
+        currentTurnIndex: currentTurnIndex,
+        answeredIds: answeredIds
+      }).catch(reportWriteError);
     }
 
     function onGameStarted() {
-      if (!myMapDone) {
-        switchNav('map');
-      }
+      switchNav('map');
     }
 
     function generateQrCode(roomCode) {
@@ -666,8 +785,14 @@
     }
 
     function heartBarString(n) {
-      const full = Math.max(0, Math.min(5, Math.round(n)));
-      return '❤️'.repeat(full) + '🤍'.repeat(5 - full);
+      const full = Math.max(0, Math.min(5, Math.round(Number(n) || 0)));
+      let out = '';
+      for (let i = 0; i < 5; i++) {
+        out += i < full
+          ? '<span class="hp-heart full">❤️</span>'
+          : '<span class="hp-heart empty">❤️</span>';
+      }
+      return out;
     }
 
     function renderRoster() {
@@ -742,7 +867,6 @@
       if (eventBox) eventBox.innerText = `📍 目前踩在 [${event.name}]：${event.prompt}`;
 
       renderPlayerAvatars();
-      checkFinish();
     }
 
     function renderPlayerAvatars() {
@@ -801,22 +925,151 @@
       });
     }
 
-    function checkFinish() {
-      const panel = document.getElementById('finish-panel');
-      if (!panel) return;
-      if (playersRef && currentPos === mapTiles.length - 1 && !myMapDone) {
-        panel.style.display = 'block';
+    function currentTurnPlayerId() {
+      if (!turnOrder.length) return null;
+      return turnOrder[currentTurnIndex % turnOrder.length];
+    }
+
+    function updateTurnUI() {
+      const banner = document.getElementById('turn-banner');
+      const diceBtn = document.getElementById('dice-btn');
+      if (!banner || !diceBtn) return;
+
+      // 單機模式（沒有房間）：不套用輪流制，永遠可以擲骰子
+      if (!playersRef) {
+        banner.style.display = 'none';
+        diceBtn.style.display = '';
+        return;
+      }
+
+      const everyoneAnswered = turnOrder.length > 0 && answeredIds.length >= turnOrder.length;
+      if (everyoneAnswered) {
+        banner.style.display = 'none';
+        diceBtn.style.display = 'none';
+        return;
+      }
+
+      const curId = currentTurnPlayerId();
+      const isMyTurn = curId === myId;
+      const curPlayer = playerStatuses.find(p => p.id === curId);
+      const curName = curPlayer ? (curPlayer.name || '匿名玩家') : '？';
+
+      banner.style.display = 'block';
+      const doneCount = answeredIds.length;
+      const totalCount = turnOrder.length;
+      banner.innerText = (isMyTurn ? '🎯 輪到你了！' : `⏳ 現在輪到：${curName}`) + `（已輪過 ${doneCount}/${totalCount} 人）`;
+      diceBtn.style.display = isMyTurn ? 'inline-flex' : 'none';
+    }
+
+    function pickRandomPromptIndex(excludeIndex) {
+      if (mapTiles.length <= 1) return 0;
+      let idx;
+      do { idx = Math.floor(Math.random() * mapTiles.length); } while (idx === excludeIndex);
+      return idx;
+    }
+
+    function currentPromptCategory() {
+      if (currentPromptTileIndex === null) return null;
+      return mapTiles[currentPromptTileIndex].board || null;
+    }
+
+    const BOARD_CAT_NAMES = { gold: '🪙 金幣寶箱', trap: '👾 泥濘陷阱', potion: '🧪 補血藥水', equip: '⚔️ 新裝備' };
+
+    function renderPromptPanel() {
+      const textEl = document.getElementById('prompt-text');
+      if (textEl && currentPromptTileIndex !== null) textEl.innerText = mapTiles[currentPromptTileIndex].prompt;
+
+      const cat = currentPromptCategory();
+      const catLabel = document.getElementById('prompt-cat-label');
+      const answerWrap = document.getElementById('prompt-answer-wrap');
+      const answerInput = document.getElementById('prompt-answer-input');
+      const submitBtn = document.getElementById('prompt-submit-btn');
+      const doneBtn = document.getElementById('prompt-done-btn');
+      const skipLink = document.getElementById('prompt-skip-link');
+
+      if (answerInput) answerInput.value = '';
+
+      if (cat && BOARD_CAT_NAMES[cat]) {
+        if (catLabel) { catLabel.style.display = 'block'; catLabel.innerText = `這題答案會加入看板的「${BOARD_CAT_NAMES[cat]}」`; }
+        if (answerWrap) answerWrap.style.display = 'block';
+        if (submitBtn) submitBtn.style.display = 'inline-flex';
+        if (doneBtn) doneBtn.style.display = 'none';
+        if (skipLink) skipLink.style.display = 'inline';
       } else {
-        panel.style.display = 'none';
+        if (catLabel) catLabel.style.display = 'none';
+        if (answerWrap) answerWrap.style.display = 'none';
+        if (submitBtn) submitBtn.style.display = 'none';
+        if (doneBtn) doneBtn.style.display = 'inline-flex';
+        if (skipLink) skipLink.style.display = 'none';
       }
     }
 
-    function finishMap() {
+    function showPromptPanel() {
+      currentPromptTileIndex = currentPos;
+      renderPromptPanel();
+      const panel = document.getElementById('prompt-panel');
+      if (panel) panel.style.display = 'block';
+    }
+
+    function rerollPrompt() {
+      currentPromptTileIndex = pickRandomPromptIndex(currentPromptTileIndex);
+      renderPromptPanel();
+    }
+
+    function closePromptPanel() {
+      const panel = document.getElementById('prompt-panel');
+      if (panel) panel.style.display = 'none';
+      currentPromptTileIndex = null;
+    }
+
+    function confirmAnswered() {
+      closePromptPanel();
+      advanceTurn();
+    }
+
+    function submitPromptAnswer() {
+      const input = document.getElementById('prompt-answer-input');
+      const text = input ? input.value.trim() : '';
+      if (!text) { alert('請先輸入你的答案，或點下方「只用講的，不寫進看板」'); return; }
+
+      const cat = currentPromptCategory();
+      if (cat) {
+        if (cardsRef) {
+          const id = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
+          cardsRef.doc(id).set({ type: cat, text, votes: 0 }).catch(reportWriteError);
+        } else {
+          cards.push({ id: String(Date.now()), type: cat, text, votes: 0 });
+          renderCards();
+        }
+      }
+
+      closePromptPanel();
+      advanceTurn();
+    }
+
+    function skipPromptAnswer() {
+      closePromptPanel();
+      advanceTurn();
+    }
+
+    function advanceTurn() {
+      if (!roomDocRef || !turnOrder.length) return;
+      const newAnswered = answeredIds.includes(myId) ? answeredIds.slice() : answeredIds.concat([myId]);
+      const nextIndex = (currentTurnIndex + 1) % turnOrder.length;
+      const updates = { currentTurnIndex: nextIndex, answeredIds: newAnswered };
+      if (newAnswered.length >= turnOrder.length) {
+        updates.phase = 'finished'; // 全部人都輪過一次了，廣播讓大家一起進看板
+      }
+      roomDocRef.update(updates).catch(reportWriteError);
+    }
+
+    function onMapFinished() {
       myMapDone = true;
       if (playersRef && myId) {
         playersRef.doc(myId).update({ mapDone: true }).catch(reportWriteError);
       }
       updateHostUI();
+      updateTurnUI();
       switchNav('board');
     }
 
@@ -824,12 +1077,12 @@
       const myVersion = ++animVersion;
       if (currentPos === targetPos) { renderMap(); return; }
 
+      // 允許繞圈：輪流制下同一個人可能會多次經過同一格
       let pos = currentPos;
       const path = [];
       while (pos !== targetPos) {
-        pos = Math.min(pos + 1, mapTiles.length - 1);
+        pos = (pos + 1) % mapTiles.length;
         path.push(pos);
-        if (pos === mapTiles.length - 1) break;
       }
 
       for (const step of path) {
@@ -847,17 +1100,20 @@
 
     function rollDice() {
       const steps = Math.floor(Math.random() * 6) + 1;
-      const goal = mapTiles.length - 1;
+
       if (playersRef && myId) {
+        if (currentTurnPlayerId() !== myId) return; // 還沒輪到你
         const me = playerStatuses.find(p => p.id === myId);
         const base = me ? me.pos : 0;
-        if (base >= goal) return;
-        const newPos = Math.min(base + steps, goal);
-        playersRef.doc(myId).update({ pos: newPos, ts: Date.now() }).catch(reportWriteError);
+        const newPos = (base + steps) % mapTiles.length;
+        pendingPromptForMe = true;
+        playersRef.doc(myId).update({ pos: newPos, ts: Date.now() }).catch((err) => {
+          pendingPromptForMe = false;
+          reportWriteError(err);
+        });
       } else {
-        if (currentPos >= goal) return;
-        const newPos = Math.min(currentPos + steps, goal);
-        animateMove(newPos);
+        const newPos = (currentPos + steps) % mapTiles.length;
+        animateMove(newPos).then(() => { showPromptPanel(); });
       }
     }
 
