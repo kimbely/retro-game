@@ -1,0 +1,1026 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>🎮 Multi-player Spring Pixel Retro</title>
+  <link href="https://fonts.googleapis.com/css2?family=VT323&family=Noto+Sans+TC:wght@400;700&display=swap" rel="stylesheet">
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+  <style>
+    :root {
+      --bg-color: #181920;
+      --card-bg: #222430;
+      --accent-green: #50fa7b;
+      --accent-pink: #ff79c6;
+      --accent-yellow: #f1fa8c;
+      --accent-cyan: #8be9fd;
+      --accent-red: #ff5555;
+      --accent-orange: #ffb86c;
+      --text-color: #f8f8f2;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Noto Sans TC', -apple-system, sans-serif; -webkit-tap-highlight-color: transparent; }
+    body { background-color: var(--bg-color); color: var(--text-color); padding: 12px; padding-bottom: 40px; }
+
+    header { text-align: center; margin-bottom: 12px; border: 3px solid var(--accent-green); padding: 10px; background: rgba(0,0,0,0.5); box-shadow: 3px 3px 0px var(--accent-green); }
+    header h1 { font-family: 'VT323', monospace; font-size: 1.8rem; color: var(--accent-green); line-height: 1.1; }
+    header p { color: var(--accent-yellow); font-size: 0.85rem; margin-top: 4px; }
+
+    .main-nav { display: flex; gap: 6px; margin-bottom: 14px; }
+    .nav-btn {
+      flex: 1; text-align: center; padding: 10px 2px;
+      background: #282a36; border: 2px solid #44475a; color: #9aa;
+      font-family: 'VT323', monospace; font-size: 1.05rem; line-height: 1.2;
+      cursor: pointer; touch-action: manipulation;
+    }
+    .nav-btn.active { background: var(--accent-green); border-color: var(--accent-green); color: #000; font-weight: bold; }
+    .nav-btn.disabled { opacity: 0.35; pointer-events: none; }
+    .page { display: none; }
+    .page.page-active { display: block; }
+
+    .howto-panel { background: #1c1d24; border: 2px dashed #6272a4; padding: 12px; margin-bottom: 12px; }
+    .howto-panel .howto-title { font-weight: bold; color: var(--accent-cyan); margin-bottom: 6px; }
+    .howto-panel ol { padding-left: 20px; font-size: 0.82rem; color: #c7c9d9; line-height: 1.7; }
+
+    .net-panel { background: #282a36; border: 2px solid var(--accent-yellow); padding: 12px; margin-bottom: 12px; }
+    .net-row { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+    .net-row input { flex: 1; min-width: 140px; padding: 8px; background: #111; border: 2px solid #6272a4; color: #fff; font-size: 16px; }
+    .net-status { font-weight: bold; color: var(--accent-cyan); font-size: 0.88rem; margin-top: 6px; }
+    .field-label { font-size: 0.78rem; color: #b3b6c9; margin-top: 8px; margin-bottom: 2px; }
+
+    .lobby-panel { display: none; }
+    .host-controls { margin: 12px 0; }
+    #wait-host-msg { text-align: center; background: #282a36; border: 2px dashed #6272a4; padding: 10px; }
+
+    .qr-panel { background: #282a36; border: 2px solid var(--accent-cyan); padding: 12px; text-align: center; margin-bottom: 12px; }
+    .qr-box { background: #fff; display: inline-block; padding: 8px; border-radius: 4px; margin-top: 10px; line-height: 0; }
+    .qr-box img, .qr-box svg { display: block; width: 150px; height: 150px; }
+    .qr-link { word-break: break-all; font-size: 0.72rem; color: var(--accent-cyan); margin-top: 8px; }
+    .qr-copy-btn { margin-top: 8px; }
+
+    .status-panel { background: #282a36; border: 2px solid var(--accent-pink); padding: 12px; margin-bottom: 12px; }
+    .status-row { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+    .status-btn {
+      flex: 1 1 18%; min-width: 58px;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+      font-family: 'Noto Sans TC', sans-serif; font-size: 0.68rem;
+      padding: 8px 2px;
+      background: #191a21; color: var(--text-color);
+      border: 2px solid #44475a; border-radius: 4px;
+      cursor: pointer; touch-action: manipulation;
+      white-space: nowrap;
+    }
+    .status-btn .btn-heart { font-size: 0.95rem; white-space: nowrap; }
+    .status-btn span { font-size: 0.65rem; color: #b3b6c9; white-space: normal; text-align: center; }
+    .status-btn.active { border-color: var(--accent-pink); background: #3a2b36; box-shadow: 0 0 8px rgba(255,121,198,0.5); }
+    .status-btn.active span { color: var(--accent-pink); }
+
+    .roster-panel { background: #282a36; border: 2px solid #6272a4; padding: 12px; margin-bottom: 12px; }
+    .roster-list { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; }
+    .roster-chip {
+      display: flex; align-items: center; gap: 6px;
+      background: #191a21; border: 2px solid #44475a; border-radius: 20px;
+      padding: 6px 12px; font-size: 0.82rem;
+    }
+    .roster-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; border: 1px solid rgba(0,0,0,0.4); flex-shrink: 0; }
+    .roster-hearts { font-size: 0.7rem; color: #b3b6c9; }
+    .roster-empty { color: #888; font-size: 0.8rem; }
+
+    .toolbar { display: flex; flex-direction: column; gap: 10px; background: var(--card-bg); padding: 12px; border: 2px solid #6272a4; margin-bottom: 15px; }
+    .timer-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .timer-display { font-family: 'VT323', monospace; font-size: 1.8rem; color: var(--accent-pink); background: #000; padding: 2px 10px; border: 2px solid var(--accent-pink); min-width: 80px; text-align: center; }
+    .btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
+
+    .pixel-btn { font-family: 'VT323', 'Noto Sans TC', monospace; font-size: 1.05rem; padding: 8px 12px; border: 2px solid #000; background: var(--accent-cyan); color: #000; font-weight: bold; cursor: pointer; box-shadow: 2px 2px 0px #000; display: inline-flex; align-items: center; justify-content: center; touch-action: manipulation; }
+    .pixel-btn:active { transform: translate(2px, 2px); box-shadow: 0px 0px 0px #000; }
+    .pixel-btn.green { background: var(--accent-green); }
+    .pixel-btn.pink { background: var(--accent-pink); }
+    .pixel-btn.yellow { background: var(--accent-yellow); }
+    .pixel-btn.full { width: 100%; }
+
+    .game-board {
+      background: linear-gradient(180deg, #17181f, #0d0e12);
+      border: 3px solid #3a3d52;
+      border-radius: 12px;
+      padding: 14px;
+      margin-bottom: 15px;
+      box-shadow: inset 0 0 0 2px #05050a, 0 4px 12px rgba(0,0,0,0.5);
+    }
+    .board-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+    .board-head-title { font-size: 0.95rem; font-weight: bold; color: var(--accent-yellow); }
+
+    .map-wrap {
+      position: relative;
+      margin-top: 12px;
+      height: 290px;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 3px solid #2b2115;
+      background:
+        radial-gradient(circle at 15% 20%, rgba(255,255,255,0.05), transparent 45%),
+        radial-gradient(circle at 80% 75%, rgba(255,255,255,0.04), transparent 40%),
+        linear-gradient(160deg, #2b3d24 0%, #223118 45%, #1a2712 100%);
+    }
+    .trail-seg {
+      position: absolute;
+      height: 4px;
+      background-image: repeating-linear-gradient(90deg, #caa06a 0 7px, transparent 7px 13px);
+      transform-origin: 0 50%;
+      opacity: 0.9;
+      z-index: 1;
+    }
+    .map-tile {
+      position: absolute;
+      width: 42px; height: 42px;
+      transform: translate(-50%, -50%);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      border: 3px solid #2b2115;
+      z-index: 2;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+    }
+    .map-tile .tile-icon { font-size: 1.15rem; filter: drop-shadow(0 1px 1px rgba(0,0,0,.6)); }
+    .map-tile .tile-num {
+      position: absolute; top: -7px; left: -7px;
+      width: 16px; height: 16px; border-radius: 50%;
+      background: #111; color: #ddd;
+      font-family: 'VT323', monospace; font-size: 0.68rem;
+      display: flex; align-items: center; justify-content: center;
+      border: 1px solid #444;
+    }
+
+    .map-tile.cat-start    { background: #6272a4; }
+    .map-tile.cat-gold     { background: var(--accent-yellow); }
+    .map-tile.cat-trap     { background: var(--accent-red); }
+    .map-tile.cat-potion   { background: var(--accent-cyan); }
+    .map-tile.cat-surprise { background: var(--accent-pink); }
+    .map-tile.cat-equip    { background: var(--accent-green); }
+    .map-tile.cat-star     { background: var(--accent-orange); }
+    .map-tile.cat-neg      { background: #c25c5c; }
+    .map-tile.cat-rest     { background: var(--accent-orange); }
+    .map-tile.cat-boss     { background: var(--accent-pink); box-shadow: 0 0 12px rgba(255,121,198,0.7); }
+    .map-tile.goal::after {
+      content: '🏁'; position: absolute; top: -20px; font-size: 1.1rem;
+    }
+
+    .map-tile.visited { opacity: 0.55; filter: grayscale(0.3); }
+    .map-tile.active {
+      box-shadow: 0 0 0 3px rgba(241,250,140,0.4), 0 0 12px var(--accent-yellow);
+      opacity: 1 !important;
+      filter: none !important;
+    }
+
+    .avatars-layer { position: absolute; inset: 0; pointer-events: none; z-index: 6; }
+    .player-avatar {
+      position: absolute;
+      width: 22px; height: 22px;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.65rem; font-weight: bold; color: #111;
+      border: 2px solid #0a0a0a;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.7);
+      transition: left .3s cubic-bezier(.4,0,.2,1), top .3s cubic-bezier(.4,0,.2,1);
+    }
+    .player-avatar.me { border-color: var(--accent-yellow); box-shadow: 0 0 7px var(--accent-yellow); }
+    .player-avatar-label {
+      position: absolute;
+      transform: translate(-50%, 0);
+      font-size: 0.56rem;
+      color: #fff;
+      white-space: nowrap;
+      text-shadow: 0 1px 2px #000, 0 0 3px #000;
+      text-align: center;
+    }
+    .player-avatar-label .lbl-hp { color: var(--accent-pink); }
+
+    #event-box { margin-top: 10px; color: var(--accent-cyan); font-size: 0.86rem; font-weight: bold; background: rgba(0,0,0,0.45); padding: 8px; border-left: 3px solid var(--accent-cyan); border-radius: 0 4px 4px 0; }
+
+    .finish-panel { display: none; background: #1e2b22; border: 2px solid var(--accent-green); padding: 12px; margin-top: 12px; text-align: center; }
+    .finish-panel .finish-title { font-weight: bold; color: var(--accent-green); font-size: 1rem; }
+    .finish-panel .pixel-btn { margin-top: 8px; }
+
+    .input-section { background: var(--card-bg); padding: 12px; border: 2px solid #6272a4; margin-bottom: 15px; display: flex; flex-direction: column; gap: 10px; }
+    .input-section select, .input-section input { padding: 10px; background: #111; border: 2px solid #6272a4; color: #fff; font-size: 16px; width: 100%; border-radius: 0; }
+
+    .mobile-tabs { display: flex; gap: 4px; margin-bottom: 10px; overflow-x: auto; }
+    .tab-btn { flex: 1; padding: 8px 4px; font-size: 0.85rem; background: #282a36; border: 2px solid #44475a; color: #888; text-align: center; cursor: pointer; white-space: nowrap; }
+    .tab-btn.active { color: #000; font-weight: bold; }
+    .tab-btn[data-type="gold"].active { background: var(--accent-yellow); border-color: var(--accent-yellow); }
+    .tab-btn[data-type="trap"].active { background: var(--accent-red); border-color: var(--accent-red); color: #fff; }
+    .tab-btn[data-type="potion"].active { background: var(--accent-cyan); border-color: var(--accent-cyan); }
+    .tab-btn[data-type="equip"].active { background: var(--accent-green); border-color: var(--accent-green); }
+
+    .board-container { display: flex; flex-direction: column; gap: 15px; }
+    .column { background: var(--card-bg); border: 2px solid #44475a; padding: 12px; display: none; }
+    .column.active-tab { display: block; }
+    .column h2 { font-family: 'VT323', monospace; font-size: 1.3rem; border-bottom: 2px dashed #6272a4; padding-bottom: 6px; margin-bottom: 10px; }
+    .col-gold h2 { color: var(--accent-yellow); }
+    .col-trap h2 { color: var(--accent-red); }
+    .col-potion h2 { color: var(--accent-cyan); }
+    .col-equip h2 { color: var(--accent-green); }
+
+    .card { background: #2e303e; border-left: 4px solid #fff; padding: 10px; margin-bottom: 10px; word-break: break-word; font-size: 0.95rem; }
+    .col-gold .card { border-left-color: var(--accent-yellow); }
+    .col-trap .card { border-left-color: var(--accent-red); }
+    .col-potion .card { border-left-color: var(--accent-cyan); }
+    .col-equip .card { border-left-color: var(--accent-green); }
+    .card-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
+    .vote-btn { background: #191a21; border: 1px solid #6272a4; color: var(--text-color); padding: 4px 10px; font-size: 0.85rem; cursor: pointer; }
+    .del-btn { color: var(--accent-red); font-size: 0.85rem; padding: 4px; cursor: pointer; }
+
+    @media (min-width: 768px) {
+      .mobile-tabs { display: none; }
+      .board-container { display: grid; grid-template-columns: repeat(4, 1fr); }
+      .column { display: block !important; }
+      .toolbar { flex-direction: row; justify-content: space-between; }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>🎮 RETRO MULTIPLAYER</h1>
+    <p>多人即時連線 Sprint 回顧會</p>
+  </header>
+
+  <nav class="main-nav">
+    <div class="nav-btn active" data-page="join" onclick="switchNav('join')">🚪 加入</div>
+    <div class="nav-btn disabled" data-page="map" onclick="switchNav('map')">🎲 地圖</div>
+    <div class="nav-btn" data-page="board" onclick="switchNav('board')">📌 看板</div>
+  </nav>
+
+  <section class="page page-active" id="page-join">
+    <div class="howto-panel">
+      <div class="howto-title">📖 使用步驟</div>
+      <ol>
+        <li>輸入你的暱稱，並建立或加入一組房間號碼</li>
+        <li>在下方選擇你目前的血量狀態，等待其他人加入</li>
+        <li>房主按下「開始遊戲」後，大家會一起進到地圖暖場</li>
+        <li>擲骰子走到終點後按「結束」，進到「看板」寫便利貼、投票、匯出紀錄</li>
+      </ol>
+    </div>
+
+    <div class="net-panel" id="pre-connect-panel">
+      <div style="font-weight: bold; color: var(--accent-yellow);">🌐 多人連線房間號碼</div>
+
+      <div class="field-label">你的暱稱</div>
+      <div class="net-row">
+        <input type="text" id="name-input" placeholder="輸入你的名字" maxlength="20" oninput="onNameChange()">
+      </div>
+
+      <div class="field-label">房間號碼</div>
+      <div class="net-row">
+        <input type="text" id="room-input" placeholder="輸入號碼 (例如: RETRO2026)">
+        <button class="pixel-btn green" onclick="enterRoom()">🔗 進入房間（建立或加入）</button>
+      </div>
+      <div id="net-status" class="net-status">目前狀態：連線服務初始化中...</div>
+    </div>
+
+    <div class="lobby-panel" id="lobby-panel">
+      <div class="status-panel">
+        <div style="font-weight: bold; color: var(--accent-pink);">🫀 選擇你目前的戰鬥狀態</div>
+        <div class="status-row" id="status-row">
+          <button class="status-btn" data-hearts="5" onclick="setMyStatus(5)"><span class="btn-heart">❤️×5</span><span>還能再戰</span></button>
+          <button class="status-btn" data-hearts="4" onclick="setMyStatus(4)"><span class="btn-heart">❤️×4</span><span>Good</span></button>
+          <button class="status-btn" data-hearts="3" onclick="setMyStatus(3)"><span class="btn-heart">❤️×3</span><span>還行</span></button>
+          <button class="status-btn" data-hearts="2" onclick="setMyStatus(2)"><span class="btn-heart">❤️×2</span><span>有點累</span></button>
+          <button class="status-btn" data-hearts="1" onclick="setMyStatus(1)"><span class="btn-heart">❤️×1</span><span>快陣亡了</span></button>
+        </div>
+      </div>
+
+      <div class="roster-panel">
+        <div style="font-weight: bold; color: var(--accent-yellow);">🧑‍🤝‍🧑 已加入房間（<span id="roster-count">0</span>）</div>
+        <div class="roster-list" id="roster-list">
+          <div class="roster-empty">尚無人加入</div>
+        </div>
+      </div>
+
+      <div class="host-controls">
+        <button id="host-start-btn" class="pixel-btn green full" onclick="startGame()" style="display:none;">🎬 開始遊戲（房主）</button>
+        <div id="wait-host-msg" class="net-status" style="display:none;">⏳ 已加入，等待房主開始遊戲...</div>
+      </div>
+
+      <div class="qr-panel" id="qr-panel">
+        <div style="font-weight: bold; color: var(--accent-cyan);">📱 邀請隊友掃碼加入（免登入）</div>
+        <div class="qr-box" id="qr-box"></div>
+        <div class="qr-link" id="qr-link"></div>
+        <button class="pixel-btn yellow qr-copy-btn" onclick="copyShareLink()">📋 複製邀請連結</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="page" id="page-map">
+    <div class="game-board">
+      <div class="board-head">
+        <span class="board-head-title">🎲 暖場地圖</span>
+        <button class="pixel-btn pink" onclick="rollDice()">🎲 擲骰子</button>
+      </div>
+      <div id="event-box">點擊按鈕擲骰子，展開今日話題！</div>
+      <div class="map-wrap" id="map-wrap">
+        <div id="trail-layer"></div>
+        <div class="map-grid" id="map-grid"></div>
+        <div class="avatars-layer" id="avatars-layer"></div>
+      </div>
+      <div class="finish-panel" id="finish-panel">
+        <div class="finish-title">🏁 你抵達終點了！</div>
+        <button class="pixel-btn green" onclick="finishMap()">✅ 結束暖場，前往看板 →</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="page" id="page-board">
+    <div class="toolbar">
+      <div class="timer-row">
+        <span style="font-size: 0.9rem;">⏱️ 計時：</span>
+        <div id="timer" class="timer-display">05:00</div>
+        <button class="pixel-btn green" onclick="toggleTimer()">開始/暫停</button>
+        <button class="pixel-btn" onclick="resetTimer()">重置</button>
+      </div>
+      <div class="btn-group">
+        <button class="pixel-btn yellow" onclick="copyMarkdown()">📋 複製 Markdown</button>
+        <button class="pixel-btn pink" onclick="downloadMarkdownFile()">📥 下載 .md 檔案</button>
+      </div>
+    </div>
+
+    <div class="input-section">
+      <select id="card-type">
+        <option value="gold">🪙 金幣寶箱 (做得好的亮點)</option>
+        <option value="trap">👾 泥濘陷阱 (踩到的坑/阻礙)</option>
+        <option value="potion">🧪 補血藥水 (感謝隊友/Shout-out)</option>
+        <option value="equip">⚔️ 新裝備 (下期行動方案)</option>
+      </select>
+      <input type="text" id="card-text" placeholder="輸入想法... (輸入完點新增同步給全體)">
+      <button class="pixel-btn green full" onclick="addCard()">➕ 新增便利貼</button>
+    </div>
+
+    <div class="mobile-tabs">
+      <div class="tab-btn active" data-type="gold" onclick="switchTab('gold')">🪙 亮點</div>
+      <div class="tab-btn" data-type="trap" onclick="switchTab('trap')">👾 阻礙</div>
+      <div class="tab-btn" data-type="potion" onclick="switchTab('potion')">🧪 感謝</div>
+      <div class="tab-btn" data-type="equip" onclick="switchTab('equip')">⚔️ 行動</div>
+    </div>
+
+    <div class="board-container">
+      <div class="column col-gold active-tab" id="col-gold">
+        <h2>🪙 金幣寶箱</h2>
+        <div id="list-gold"></div>
+      </div>
+      <div class="column col-trap" id="col-trap">
+        <h2>👾 泥濘陷阱</h2>
+        <div id="list-trap"></div>
+      </div>
+      <div class="column col-potion" id="col-potion">
+        <h2>🧪 補血藥水</h2>
+        <div id="list-potion"></div>
+      </div>
+      <div class="column col-equip" id="col-equip">
+        <h2>⚔️ 新裝備</h2>
+        <div id="list-equip"></div>
+      </div>
+    </div>
+  </section>
+
+  <script>
+    // ===== Firebase 初始化 =====
+    const firebaseConfig = {
+      apiKey: "AIzaSyARvzj0SpRu8hgfgNHuDujK14_8PqcVWKc",
+      authDomain: "retro-game-c4605.firebaseapp.com",
+      projectId: "retro-game-c4605",
+      storageBucket: "retro-game-c4605.firebasestorage.app",
+      messagingSenderId: "579406003408",
+      appId: "1:579406003408:web:732c4d0afd1d90351cb2d5",
+      measurementId: "G-465W520HFF"
+    };
+
+    let fbApp = null, fbAuth = null, db = null;
+    try {
+      fbApp = firebase.initializeApp(firebaseConfig);
+      fbAuth = firebase.auth();
+      db = firebase.firestore();
+    } catch (e) {
+      console.error('Firebase 初始化失敗', e);
+    }
+
+    // 10 格地圖資料（在地圖上的相對百分比座標，繪出蜿蜒的探險路徑）
+    const mapTiles = [
+      { name: "起點",   icon: "🚩", cat: "start",    prompt: "團隊準備就緒，開始本期 Retro！",                         x: 8,  y: 84 },
+      { name: "金幣箱", icon: "🪙", cat: "gold",     prompt: "【金幣】這個 Sprint 做得最順暢的一件事是什麼？",         x: 24, y: 66 },
+      { name: "沼澤",   icon: "👾", cat: "trap",     prompt: "【陷阱】哪裡最卡？拖慢了你的開發速度？",                 x: 16, y: 46 },
+      { name: "泉水",   icon: "🧪", cat: "potion",   prompt: "【補血】大聲感謝這期最神救援你的隊友！",                 x: 34, y: 36 },
+      { name: "寶箱怪", icon: "📦", cat: "surprise", prompt: "【突發】本期出現了什麼意料之外的 Bug 或插隊需求？",     x: 52, y: 50 },
+      { name: "鐵匠舖", icon: "⚔️", cat: "equip",    prompt: "【裝備】下期我們該引進什麼新工具或改善流程？",           x: 66, y: 32 },
+      { name: "無敵星", icon: "⭐", cat: "star",     prompt: "【無敵】團隊本次最值得驕傲的突破是什麼？",               x: 50, y: 16 },
+      { name: "毒菇",   icon: "🍄", cat: "neg",      prompt: "【負面】哪個溝通或對接環節讓你心累？",                   x: 68, y: 10 },
+      { name: "營火",   icon: "🔥", cat: "rest",     prompt: "【休息】用一個詞形容你這期的工作心情！",                 x: 84, y: 24 },
+      { name: "Boss房", icon: "👑", cat: "boss",     prompt: "【魔王戰】針對最多人投票的問題產出 Action Item！",       x: 92, y: 8 }
+    ];
+
+    const AVATAR_COLORS = ['#50fa7b', '#ff79c6', '#f1fa8c', '#8be9fd', '#ff5555', '#ffb86c'];
+
+    let currentPos = 0;
+    let cards = [];
+
+    let myId = null;
+    let myName = '';
+    let myHearts = null;
+    let myMapDone = false;
+    let playerStatuses = [];
+    let roomDocRef = null;
+    let cardsRef = null;
+    let playersRef = null;
+    let unsubRoomDoc = null;
+    let unsubCards = null;
+    let unsubPlayers = null;
+    let animVersion = 0;
+    let currentRoomCode = null;
+    let isHost = false;
+    let roomPhase = 'lobby';
+
+    function updateStatus(msg) {
+      document.getElementById('net-status').innerText = "目前狀態：" + msg;
+    }
+
+    function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+
+    function reportWriteError(err) {
+      const code = err && err.code ? err.code : (err && err.message ? err.message : String(err));
+      updateStatus(`寫入同步資料失敗（${code}），請確認房間號碼是否正確，或重新整理頁面再試一次。`);
+    }
+
+    function colorForId(id) {
+      let hash = 0;
+      const s = String(id || '');
+      for (let i = 0; i < s.length; i++) hash = (hash * 31 + s.charCodeAt(i)) >>> 0;
+      return AVATAR_COLORS[hash % AVATAR_COLORS.length];
+    }
+
+    function switchNav(page) {
+      const mapBtn = document.querySelector('.nav-btn[data-page="map"]');
+      if (page === 'map' && mapBtn && mapBtn.classList.contains('disabled')) return;
+
+      document.querySelectorAll('.page').forEach(p => p.classList.remove('page-active'));
+      const target = document.getElementById('page-' + page);
+      if (target) target.classList.add('page-active');
+      document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.page === page));
+      if (page === 'map') {
+        requestAnimationFrame(() => { renderMap(); });
+      }
+    }
+
+    function applyUrlParams() {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const roomParam = params.get('room');
+        if (roomParam) {
+          const input = document.getElementById('room-input');
+          if (input) input.value = roomParam;
+        }
+      } catch (e) {}
+    }
+
+    function loadLocalName() {
+      try {
+        myName = localStorage.getItem('retro_display_name') || '';
+      } catch (e) {
+        myName = '';
+      }
+      const input = document.getElementById('name-input');
+      if (input) input.value = myName;
+    }
+
+    function onNameChange() {
+      const input = document.getElementById('name-input');
+      myName = (input.value || '').trim().slice(0, 20);
+      try { localStorage.setItem('retro_display_name', myName); } catch (e) {}
+      syncMyPlayerDoc();
+      renderPlayerAvatars();
+    }
+
+    function syncMyPlayerDoc() {
+      if (playersRef && myId) {
+        playersRef.doc(myId).set({
+          name: myName || '匿名玩家',
+          hearts: myHearts || 0,
+          pos: currentPos || 0,
+          mapDone: myMapDone,
+          ts: Date.now()
+        }).catch(reportWriteError);
+      }
+    }
+
+    function initSync() {
+      if (!db || !fbAuth) {
+        updateStatus("Firebase 尚未正確初始化，僅能單機使用（請檢查 firebaseConfig 或網路連線）");
+        const mapBtn = document.querySelector('.nav-btn[data-page="map"]');
+        if (mapBtn) mapBtn.classList.remove('disabled');
+        return;
+      }
+
+      fbAuth.onAuthStateChanged((u) => {
+        if (u) {
+          myId = u.uid;
+          updateStatus("連線服務已就緒，輸入暱稱與房間號碼即可開始");
+        }
+      });
+
+      fbAuth.signInAnonymously().catch((err) => {
+        updateStatus(`匿名登入失敗（${err.code || err.message}），僅能單機使用`);
+        const mapBtn = document.querySelector('.nav-btn[data-page="map"]');
+        if (mapBtn) mapBtn.classList.remove('disabled');
+      });
+
+      renderRoster();
+    }
+
+    async function enterRoom() {
+      const roomCode = document.getElementById('room-input').value.trim();
+      if (!roomCode) { alert("請輸入房間號碼！"); return; }
+      if (!db) { alert("即時同步服務尚未就緒，請稍候片刻或重新整理頁面再試一次。"); return; }
+      if (!myId) { alert("使用者身份尚未就緒，請稍候一兩秒再按一次「進入房間」。"); return; }
+
+      if (unsubRoomDoc) { unsubRoomDoc(); unsubRoomDoc = null; }
+      if (unsubCards) { unsubCards(); unsubCards = null; }
+      if (unsubPlayers) { unsubPlayers(); unsubPlayers = null; }
+
+      currentRoomCode = roomCode;
+      roomDocRef = db.doc(`rooms/${roomCode}`);
+      cardsRef = db.collection(`rooms/${roomCode}/cards`);
+      playersRef = db.collection(`rooms/${roomCode}/players`);
+
+      updateStatus(`連線中...〔房間：${roomCode}〕`);
+
+      try {
+        const snap = await roomDocRef.get();
+        if (snap.exists) {
+          const data = snap.data() || {};
+          isHost = data.hostId === myId;
+          roomPhase = data.phase || 'lobby';
+        } else {
+          isHost = true;
+          roomPhase = 'lobby';
+          await roomDocRef.set({ hostId: myId, phase: 'lobby' });
+        }
+      } catch (e) {
+        isHost = false;
+        roomPhase = 'lobby';
+      }
+
+      document.getElementById('pre-connect-panel').style.display = 'none';
+      document.getElementById('lobby-panel').style.display = 'block';
+      updateHostUI();
+      if (roomPhase === 'started') { onGameStarted(); }
+
+      unsubRoomDoc = roomDocRef.onSnapshot((snap) => {
+        const data = snap.exists ? snap.data() : { phase: 'lobby' };
+        const prevPhase = roomPhase;
+        roomPhase = data.phase || 'lobby';
+        isHost = data.hostId === myId;
+        updateHostUI();
+        if (prevPhase !== 'started' && roomPhase === 'started') {
+          onGameStarted();
+        }
+      }, reportWriteError);
+
+      unsubCards = cardsRef.onSnapshot((qsnap) => {
+        cards = qsnap.docs.map(d => ({ id: d.id, ...(d.data() || {}) }));
+        renderCards();
+      }, (err) => {
+        updateStatus(`便利貼同步發生問題（${err.code || err.message}），請重新輸入房間號碼再試一次。`);
+      });
+
+      unsubPlayers = playersRef.onSnapshot((qsnap) => {
+        playerStatuses = qsnap.docs.map(d => {
+          const data = d.data() || {};
+          return {
+            id: d.id,
+            name: data.name || '',
+            hearts: data.hearts || 0,
+            pos: typeof data.pos === 'number' ? data.pos : 0,
+            mapDone: !!data.mapDone
+          };
+        });
+        const me = playerStatuses.find(p => p.id === myId);
+        if (me) {
+          myMapDone = !!me.mapDone;
+          if (me.pos !== currentPos) {
+            animateMove(me.pos);
+          } else {
+            renderMap();
+          }
+        }
+        renderRoster();
+        updateHostUI();
+      }, (err) => {
+        updateStatus(`隊友狀態同步發生問題（${err.code || err.message}），請重新輸入房間號碼再試一次。`);
+      });
+
+      syncMyPlayerDoc();
+      generateQrCode(roomCode);
+    }
+
+    function updateHostUI() {
+      const startBtn = document.getElementById('host-start-btn');
+      const waitMsg = document.getElementById('wait-host-msg');
+      const mapBtn = document.querySelector('.nav-btn[data-page="map"]');
+
+      if (startBtn) startBtn.style.display = (isHost && roomPhase === 'lobby') ? 'flex' : 'none';
+      if (waitMsg) waitMsg.style.display = (!isHost && roomPhase === 'lobby') ? 'block' : 'none';
+
+      if (!mapBtn) return;
+      if (myMapDone) {
+        mapBtn.style.display = 'none';
+      } else if (roomPhase === 'started') {
+        mapBtn.style.display = '';
+        mapBtn.classList.remove('disabled');
+      } else {
+        mapBtn.style.display = '';
+        mapBtn.classList.add('disabled');
+      }
+    }
+
+    function startGame() {
+      if (!roomDocRef || !isHost) return;
+      roomDocRef.set({ hostId: myId, phase: 'started' }).catch(reportWriteError);
+    }
+
+    function onGameStarted() {
+      if (!myMapDone) {
+        switchNav('map');
+      }
+    }
+
+    function generateQrCode(roomCode) {
+      const qrBox = document.getElementById('qr-box');
+      const linkEl = document.getElementById('qr-link');
+      if (!qrBox) return;
+
+      let shareUrl = window.location.href;
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.set('room', roomCode);
+        shareUrl = url.toString();
+      } catch (e) {}
+
+      qrBox.innerHTML = '';
+      try {
+        if (typeof qrcode === 'function') {
+          const qr = qrcode(0, 'M');
+          qr.addData(shareUrl);
+          qr.make();
+          qrBox.innerHTML = qr.createImgTag(4, 8);
+        } else {
+          qrBox.innerText = '（QR Code 產生器載入中或不可用，請直接分享下方連結）';
+        }
+      } catch (e) {
+        qrBox.innerText = '（QR Code 產生失敗，請直接分享下方連結）';
+      }
+
+      if (linkEl) linkEl.innerText = shareUrl;
+      document.getElementById('qr-panel').dataset.shareUrl = shareUrl;
+    }
+
+    function copyShareLink() {
+      const qrPanel = document.getElementById('qr-panel');
+      const shareUrl = qrPanel ? qrPanel.dataset.shareUrl : '';
+      if (!shareUrl) return;
+      navigator.clipboard.writeText(shareUrl).then(() => alert("✅ 已複製邀請連結！"));
+    }
+
+    function setMyStatus(n) {
+      myHearts = n;
+      document.querySelectorAll('.status-btn').forEach(btn => {
+        btn.classList.toggle('active', Number(btn.dataset.hearts) === n);
+      });
+      syncMyPlayerDoc();
+      renderPlayerAvatars();
+    }
+
+    function heartBarString(n) {
+      const full = Math.max(0, Math.min(5, Math.round(n)));
+      return '❤️'.repeat(full) + '🤍'.repeat(5 - full);
+    }
+
+    function renderRoster() {
+      const list = document.getElementById('roster-list');
+      const countEl = document.getElementById('roster-count');
+      if (!list) return;
+      if (!playersRef || playerStatuses.length === 0) {
+        list.innerHTML = '<div class="roster-empty">尚無人加入</div>';
+        if (countEl) countEl.innerText = '0';
+        return;
+      }
+      if (countEl) countEl.innerText = String(playerStatuses.length);
+      list.innerHTML = playerStatuses.map(p => {
+        const label = escapeHtml(p.name || '匿名玩家');
+        const dotColor = colorForId(p.id);
+        const meTag = p.id === myId ? '（你）' : '';
+        const doneTag = p.mapDone ? ' ✅' : '';
+        return `<div class="roster-chip"><span class="roster-dot" style="background:${dotColor};"></span>${label}${meTag}${doneTag}<span class="roster-hearts">${heartBarString(p.hearts || 0)}</span></div>`;
+      }).join('');
+    }
+
+    function tilePixelPos(index) {
+      const wrap = document.getElementById('map-wrap');
+      const w = wrap.clientWidth, h = wrap.clientHeight;
+      const t = mapTiles[index];
+      return { left: (t.x / 100) * w, top: (t.y / 100) * h };
+    }
+
+    function drawTrail() {
+      const layer = document.getElementById('trail-layer');
+      if (!layer) return;
+      layer.innerHTML = '';
+      for (let i = 0; i < mapTiles.length - 1; i++) {
+        const a = tilePixelPos(i);
+        const b = tilePixelPos(i + 1);
+        const dx = b.left - a.left, dy = b.top - a.top;
+        const length = Math.sqrt(dx * dx + dy * dy);
+        const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+        const seg = document.createElement('div');
+        seg.className = 'trail-seg';
+        seg.style.width = length + 'px';
+        seg.style.left = a.left + 'px';
+        seg.style.top = a.top + 'px';
+        seg.style.transform = `rotate(${angle}deg)`;
+        layer.appendChild(seg);
+      }
+    }
+
+    function renderMap() {
+      const grid = document.getElementById('map-grid');
+      if (!grid) return;
+
+      drawTrail();
+      grid.innerHTML = '';
+      mapTiles.forEach((tile, index) => {
+        const pos = tilePixelPos(index);
+        const div = document.createElement('div');
+        let cls = 'map-tile cat-' + tile.cat;
+        if (index === mapTiles.length - 1) cls += ' goal';
+        if (index === currentPos) cls += ' active';
+        else if (index < currentPos) cls += ' visited';
+        div.className = cls;
+        div.style.left = pos.left + 'px';
+        div.style.top = pos.top + 'px';
+        div.dataset.index = index;
+        div.innerHTML = `<span class="tile-num">${index + 1}</span><span class="tile-icon">${tile.icon}</span>`;
+        grid.appendChild(div);
+      });
+
+      const event = mapTiles[currentPos];
+      const eventBox = document.getElementById('event-box');
+      if (eventBox) eventBox.innerText = `📍 目前踩在 [${event.name}]：${event.prompt}`;
+
+      renderPlayerAvatars();
+      checkFinish();
+    }
+
+    function renderPlayerAvatars() {
+      const layer = document.getElementById('avatars-layer');
+      if (!layer) return;
+      layer.innerHTML = '';
+
+      let entries;
+      if (playersRef && playerStatuses.length > 0) {
+        entries = playerStatuses.map(p => ({
+          id: p.id,
+          name: p.name || '匿名玩家',
+          hearts: p.hearts || 0,
+          pos: typeof p.pos === 'number' ? p.pos : 0,
+          isMe: p.id === myId
+        }));
+      } else {
+        entries = [{ id: 'me', name: myName || '你', hearts: myHearts || 0, pos: currentPos, isMe: true }];
+      }
+
+      const byTile = {};
+      entries.forEach(e => {
+        if (!byTile[e.pos]) byTile[e.pos] = [];
+        byTile[e.pos].push(e);
+      });
+
+      Object.keys(byTile).forEach(posKey => {
+        const pos = Number(posKey);
+        const tilePos = tilePixelPos(pos);
+        const group = byTile[pos];
+        const spacing = 22;
+        const startOffset = -((group.length - 1) * spacing) / 2;
+
+        group.forEach((p, i) => {
+          const left = tilePos.left + startOffset + i * spacing;
+          const top = tilePos.top - 24;
+
+          const chip = document.createElement('div');
+          chip.className = 'player-avatar' + (p.isMe ? ' me' : '');
+          chip.style.left = left + 'px';
+          chip.style.top = top + 'px';
+          chip.style.background = colorForId(p.id);
+          chip.title = p.name;
+          chip.innerText = (p.name || '?').trim().charAt(0).toUpperCase() || '?';
+          layer.appendChild(chip);
+
+          if (group.length === 1) {
+            const label = document.createElement('div');
+            label.className = 'player-avatar-label';
+            label.style.left = tilePos.left + 'px';
+            label.style.top = (top - 13) + 'px';
+            label.innerHTML = `${escapeHtml(p.name)}${p.isMe ? '（你）' : ''} <span class="lbl-hp">❤️${p.hearts}</span>`;
+            layer.appendChild(label);
+          }
+        });
+      });
+    }
+
+    function checkFinish() {
+      const panel = document.getElementById('finish-panel');
+      if (!panel) return;
+      if (playersRef && currentPos === mapTiles.length - 1 && !myMapDone) {
+        panel.style.display = 'block';
+      } else {
+        panel.style.display = 'none';
+      }
+    }
+
+    function finishMap() {
+      myMapDone = true;
+      if (playersRef && myId) {
+        playersRef.doc(myId).update({ mapDone: true }).catch(reportWriteError);
+      }
+      updateHostUI();
+      switchNav('board');
+    }
+
+    async function animateMove(targetPos) {
+      const myVersion = ++animVersion;
+      if (currentPos === targetPos) { renderMap(); return; }
+
+      let pos = currentPos;
+      const path = [];
+      while (pos !== targetPos) {
+        pos = Math.min(pos + 1, mapTiles.length - 1);
+        path.push(pos);
+        if (pos === mapTiles.length - 1) break;
+      }
+
+      for (const step of path) {
+        if (myVersion !== animVersion) return;
+        currentPos = step;
+        renderMap();
+        await sleep(200);
+      }
+    }
+
+    window.addEventListener('resize', () => {
+      const mapPage = document.getElementById('page-map');
+      if (mapPage && mapPage.classList.contains('page-active')) renderMap();
+    });
+
+    function rollDice() {
+      const steps = Math.floor(Math.random() * 6) + 1;
+      const goal = mapTiles.length - 1;
+      if (playersRef && myId) {
+        const me = playerStatuses.find(p => p.id === myId);
+        const base = me ? me.pos : 0;
+        if (base >= goal) return;
+        const newPos = Math.min(base + steps, goal);
+        playersRef.doc(myId).update({ pos: newPos, ts: Date.now() }).catch(reportWriteError);
+      } else {
+        if (currentPos >= goal) return;
+        const newPos = Math.min(currentPos + steps, goal);
+        animateMove(newPos);
+      }
+    }
+
+    function addCard() {
+      const type = document.getElementById('card-type').value;
+      const input = document.getElementById('card-text');
+      const text = input.value.trim();
+      if (!text) return;
+
+      if (cardsRef) {
+        const id = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
+        cardsRef.doc(id).set({ type, text, votes: 0 }).catch(reportWriteError);
+      } else {
+        cards.push({ id: String(Date.now()), type, text, votes: 0 });
+        renderCards();
+      }
+      input.value = '';
+
+      if (window.innerWidth < 768) switchTab(type);
+    }
+
+    function voteCard(id) {
+      if (cardsRef) {
+        const card = cards.find(c => String(c.id) === String(id));
+        const currentVotes = card ? (card.votes || 0) : 0;
+        cardsRef.doc(String(id)).update({ votes: currentVotes + 1 }).catch(reportWriteError);
+      } else {
+        const c = cards.find(x => String(x.id) === String(id));
+        if (c) c.votes += 1;
+        renderCards();
+      }
+    }
+
+    function deleteCard(id) {
+      if (cardsRef) {
+        cardsRef.doc(String(id)).delete().catch(reportWriteError);
+      } else {
+        cards = cards.filter(x => String(x.id) !== String(id));
+        renderCards();
+      }
+    }
+
+    function renderCards() {
+      ['gold', 'trap', 'potion', 'equip'].forEach(type => {
+        document.getElementById(`list-${type}`).innerHTML = '';
+      });
+
+      cards.forEach(card => {
+        const container = document.getElementById(`list-${card.type}`);
+        if (!container) return;
+
+        const cardEl = document.createElement('div');
+        cardEl.className = 'card';
+        cardEl.innerHTML = `
+          <div>${escapeHtml(card.text)}</div>
+          <div class="card-footer">
+            <button class="vote-btn" onclick="voteCard('${card.id}')">👍 ${card.votes || 0}</button>
+            <span class="del-btn" onclick="deleteCard('${card.id}')">刪除</span>
+          </div>
+        `;
+        container.appendChild(cardEl);
+      });
+    }
+
+    function switchTab(type) {
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.type === type));
+      document.querySelectorAll('.column').forEach(col => col.classList.remove('active-tab'));
+      document.getElementById(`col-${type}`).classList.add('active-tab');
+    }
+
+    function escapeHtml(text) {
+      return String(text).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[m]);
+    }
+
+    let timerInterval = null;
+    let timeLeft = 300;
+    function updateTimerDisplay() {
+      const mins = Math.floor(timeLeft / 60).toString().padStart(2, '0');
+      const secs = (timeLeft % 60).toString().padStart(2, '0');
+      document.getElementById('timer').innerText = `${mins}:${secs}`;
+    }
+    function toggleTimer() {
+      if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+      else {
+        timerInterval = setInterval(() => {
+          if (timeLeft > 0) { timeLeft--; updateTimerDisplay(); }
+          else { clearInterval(timerInterval); alert("⏰ 時間到！開始討論議題！"); }
+        }, 1000);
+      }
+    }
+    function resetTimer() { clearInterval(timerInterval); timerInterval = null; timeLeft = 300; updateTimerDisplay(); }
+
+    function generateMarkdownText() {
+      let md = `# 🎮 Sprint Retrospective 紀錄 (${new Date().toLocaleDateString()})\n\n`;
+      const categories = { gold: "🪙 金幣寶箱 (Highlights)", trap: "👾 泥濘陷阱 (Obstacles)", potion: "🧪 補血藥水 (Shout-outs)", equip: "⚔️ 新裝備 (Action Items)" };
+      Object.keys(categories).forEach(type => {
+        md += `### ${categories[type]}\n`;
+        const items = cards.filter(c => c.type === type);
+        if (items.length === 0) md += `- *(無)*\n`;
+        else items.forEach(i => { md += `- ${i.text} (贊同數: ${i.votes})\n`; });
+        md += `\n`;
+      });
+      return md;
+    }
+
+    function copyMarkdown() {
+      if (cards.length === 0) { alert("尚無內容！"); return; }
+      navigator.clipboard.writeText(generateMarkdownText()).then(() => alert("✅ 已成功複製 Markdown 至剪貼簿！"));
+    }
+
+    function downloadMarkdownFile() {
+      if (cards.length === 0) { alert("尚無內容可下載！"); return; }
+      const mdText = generateMarkdownText();
+      const blob = new Blob([mdText], { type: 'text/markdown;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const fileName = `Retro_${new Date().toISOString().slice(0, 10)}.md`;
+
+      link.href = url;
+      link.setAttribute('download', fileName);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }
+
+    applyUrlParams();
+    loadLocalName();
+    initSync();
+  </script>
+</body>
+</html>
