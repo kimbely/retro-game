@@ -867,6 +867,39 @@
       leaveClosedRoom('✅ 房間資料已刪除，這場 Retro 結束了！');
     }
 
+    async function deleteRoomData(roomRef) {
+      for (const name of ['cards', 'players']) {
+        const snap = await roomRef.collection(name).get();
+        // 一個 batch 最多 500 筆
+        for (let i = 0; i < snap.docs.length; i += 400) {
+          const batch = db.batch();
+          snap.docs.slice(i, i + 400).forEach(d => batch.delete(d.ref));
+          await batch.commit();
+        }
+      }
+      await roomRef.delete();
+    }
+
+    // 免費方案不能用 Firestore TTL，改成每次有人進房間時，在背景順便清掉過期或已關閉但沒刪乾淨的房間。
+    // 失敗不影響使用，下次有人進房再清。
+    async function cleanupExpiredRooms(currentCode) {
+      try {
+        const now = firebase.firestore.Timestamp.now();
+        const [expired, closed] = await Promise.all([
+          db.collection('rooms').where('expireAt', '<', now).limit(5).get(),
+          db.collection('rooms').where('closed', '==', true).limit(5).get()
+        ]);
+        const seen = new Set();
+        for (const d of expired.docs.concat(closed.docs)) {
+          if (d.id === currentCode || seen.has(d.id)) continue;
+          seen.add(d.id);
+          await deleteRoomData(d.ref);
+        }
+      } catch (e) {
+        console.warn('清除過期房間失敗', e);
+      }
+    }
+
     // 房間被關閉（或刪除）後，停止同步並回到首頁；不清掉的話，殘留的寫入會把房間重新建立回來
     function leaveClosedRoom(message) {
       if (unsubRoomDoc) { unsubRoomDoc(); unsubRoomDoc = null; }
