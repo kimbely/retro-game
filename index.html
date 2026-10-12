@@ -855,20 +855,11 @@
       if (!roomDocRef || !isHost) return;
       if (!confirm('確定要結束這場 Retro 嗎？\n\n房間裡所有便利貼、投票、行動方案都會從資料庫永久刪除，所有人都會被送回首頁。\n\n還沒存紀錄的話，請先按「📋 複製 Markdown」或「📥 下載 .md 檔案」。')) return;
 
-      const roomRef = roomDocRef, cardsCol = cardsRef, playersCol = playersRef;
+      const roomRef = roomDocRef;
       try {
         // 先標記關閉，讓其他人馬上收到通知，再刪子集合，最後刪房間本身
         await roomRef.update({ closed: true });
-        for (const col of [cardsCol, playersCol]) {
-          const snap = await col.get();
-          // 一個 batch 最多 500 筆
-          for (let i = 0; i < snap.docs.length; i += 400) {
-            const batch = db.batch();
-            snap.docs.slice(i, i + 400).forEach(d => batch.delete(d.ref));
-            await batch.commit();
-          }
-        }
-        await roomRef.delete();
+        await deleteRoomData(roomRef);
       } catch (e) {
         reportWriteError(e);
         return;
