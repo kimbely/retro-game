@@ -1670,12 +1670,14 @@
           items.forEach(i => {
             const tag = tagMap[i.id] || '?';
             const voters = Array.isArray(i.voters) ? i.voters : [];
-            const voterNames = voters.map(v => v.name || '匿名玩家').join('、');
+            const voterNames = voters.map(v => v.name || '匿名玩家').join(', ');
             let line = `- [${tag}] ${i.text}（${i.author || '匿名玩家'}）(讚: ${voters.length}${voterNames ? ' - ' + voterNames : ''})`;
             if (i.refCardId) {
               const refCard = cards.find(c => c.id === i.refCardId);
               if (refCard) line += ` — 回應 [${tagMap[refCard.id] || '?'}] ${refCard.text}`;
             }
+            const backRefs = cards.filter(c => c.type === 'equip' && c.refCardId === i.id);
+            if (backRefs.length) line += ` — 行動方案: ${backRefs.map(c => '[' + (tagMap[c.id] || '?') + ']').join(' ')}`;
             md += line + `\n`;
           });
         }
