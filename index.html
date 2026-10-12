@@ -96,7 +96,9 @@
     .toolbar { display: flex; flex-direction: column; gap: 10px; background: var(--card-bg); padding: 12px; border: 2px solid #6272a4; margin-bottom: 15px; }
     .timer-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
     .timer-display { font-family: 'VT323', monospace; font-size: 1.8rem; color: var(--accent-pink); background: #000; padding: 2px 10px; border: 2px solid var(--accent-pink); min-width: 80px; text-align: center; }
-    .btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
+    .btn-group { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .close-room-btn { margin-left: auto; background: transparent; border: 1px solid var(--accent-red); color: var(--accent-red); font-family: inherit; font-size: 0.8rem; padding: 4px 8px; cursor: pointer; }
+    .close-room-btn:hover { background: rgba(255,85,85,0.12); }
 
     .pixel-btn { font-family: 'VT323', 'Noto Sans TC', monospace; font-size: 1.05rem; padding: 8px 12px; border: 2px solid #000; background: var(--accent-cyan); color: #000; font-weight: bold; cursor: pointer; box-shadow: 2px 2px 0px #000; display: inline-flex; align-items: center; justify-content: center; touch-action: manipulation; }
     .pixel-btn:active { transform: translate(2px, 2px); box-shadow: 0px 0px 0px #000; }
@@ -451,8 +453,8 @@
       <div class="btn-group">
         <button class="pixel-btn yellow" onclick="copyMarkdown()">📋 複製 Markdown</button>
         <button class="pixel-btn pink" onclick="downloadMarkdownFile()">📥 下載 .md 檔案</button>
+        <button class="close-room-btn" id="close-room-btn" onclick="closeRoom()" title="結束 Retro 並刪除房間資料（房主）" style="display:none;">🧹 結束 Retro</button>
       </div>
-      <button class="pixel-btn full" id="close-room-btn" onclick="closeRoom()" style="display:none; margin-top:8px; background: var(--accent-red);">🧹 結束 Retro 並刪除房間資料（房主）</button>
     </div>
 
     <div class="voting-setup" id="voting-setup">
@@ -867,7 +869,7 @@
       if (startBtn) startBtn.style.display = (isHost && roomPhase === 'lobby') ? 'flex' : 'none';
       if (waitMsg) waitMsg.style.display = (!isHost && roomPhase === 'lobby') ? 'block' : 'none';
       const closeBtn = document.getElementById('close-room-btn');
-      if (closeBtn) closeBtn.style.display = (isHost && roomDocRef) ? 'flex' : 'none';
+      if (closeBtn) closeBtn.style.display = (isHost && roomDocRef) ? 'inline-block' : 'none';
     }
 
     // 每筆資料帶過期時間；房主忘了按刪除時，cleanupExpiredRooms 會在之後有人進房時清掉。
