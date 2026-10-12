@@ -284,14 +284,29 @@
 
     .voting-setup { background: #282a36; border: 2px solid var(--accent-pink); padding: 12px; margin-bottom: 12px; }
     .voting-results { background: #282a36; border: 2px solid var(--accent-yellow); padding: 12px; margin-bottom: 12px; }
-    .voting-results-title { font-weight: bold; color: var(--accent-yellow); margin-bottom: 8px; }
-    .result-row { display: flex; gap: 8px; align-items: flex-start; padding: 8px 0; border-top: 1px dashed #44475a; }
-    .result-row:first-of-type { border-top: none; }
-    .result-rank { font-family: 'VT323', monospace; font-size: 1.2rem; color: var(--accent-yellow); min-width: 28px; }
-    .result-body { flex: 1; min-width: 0; font-size: 0.9rem; word-break: break-word; }
-    .result-body .card-tag-inline { font-family: 'VT323', monospace; color: #9aa0b5; margin-right: 4px; cursor: pointer; }
-    .result-meta { font-size: 0.75rem; color: #b3b6c9; margin-top: 2px; }
-    .result-row .pixel-btn { font-size: 0.9rem; padding: 4px 8px; white-space: nowrap; }
+    .voting-results-title { font-weight: bold; color: var(--accent-yellow); font-size: 1.05rem; }
+    .voting-results-sub { font-size: 0.8rem; color: #b3b6c9; margin: 4px 0 12px; }
+    .problem-block { background: #21222c; border-left: 4px solid var(--accent-red); padding: 10px; margin-bottom: 12px; }
+    .problem-block.kind-gold { border-left-color: var(--accent-yellow); }
+    .problem-block.kind-other { border-left-color: #6272a4; }
+    .problem-head { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+    .problem-rank { font-family: 'VT323', monospace; font-size: 1.3rem; color: var(--accent-yellow); }
+    .problem-kind { font-size: 0.72rem; color: #9aa0b5; background: rgba(255,255,255,0.06); padding: 1px 6px; border-radius: 3px; }
+    .problem-text { font-weight: bold; flex: 1; min-width: 0; word-break: break-word; }
+    .problem-text .card-tag-inline { font-family: 'VT323', monospace; color: #9aa0b5; margin-right: 4px; cursor: pointer; font-weight: normal; }
+    .problem-votes { font-size: 0.75rem; color: #b3b6c9; margin-top: 2px; }
+    .solution-label { font-size: 0.78rem; color: var(--accent-green); margin: 10px 0 4px; }
+    .solution-item { background: #2e303e; border-left: 3px solid var(--accent-green); padding: 6px 8px; margin-bottom: 6px; font-size: 0.9rem; word-break: break-word; }
+    .solution-item.winner { border-left-color: var(--accent-yellow); background: #3a3a2a; }
+    .solution-row { display: flex; gap: 8px; align-items: flex-start; justify-content: space-between; }
+    .solution-author { color: #9aa0b5; font-size: 0.75rem; white-space: nowrap; }
+    .solution-empty { font-size: 0.8rem; color: #6b6f8a; font-style: italic; margin-bottom: 6px; }
+    .solution-input { display: flex; gap: 6px; margin-top: 6px; }
+    .solution-input input { flex: 1; min-width: 0; padding: 8px; background: #111; border: 2px solid #6272a4; color: #fff; font-size: 16px; }
+    .solution-input .pixel-btn { white-space: nowrap; }
+    .host-controls { border-top: 2px dashed #44475a; padding-top: 10px; margin-top: 4px; display: flex; flex-direction: column; gap: 8px; }
+    .host-controls .net-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; font-size: 0.85rem; }
+    .host-controls input { padding: 6px; background: #111; border: 2px solid #6272a4; color: #fff; font-size: 16px; max-width: 64px; }
     .voting-setup input { padding: 8px; background: #111; border: 2px solid #6272a4; color: #fff; font-size: 16px; }
 
     @media (min-width: 768px) {
@@ -451,7 +466,6 @@
     <div class="voting-results" id="voting-results" style="display:none;"></div>
 
     <div class="input-section" id="card-input-section">
-      <div id="action-only-msg" class="field-label" style="display:none; color: var(--accent-yellow);">⚔️ 投票結束！現在只能新增行動方案，記得選它要解決/延續哪一張</div>
       <select id="card-type" onchange="onCardTypeChange()">
         <option value="gold">🪙 金幣寶箱 (做得好的亮點)</option>
         <option value="trap">👾 泥濘陷阱 (踩到的坑/阻礙)</option>
@@ -468,7 +482,7 @@
         <option value="__new__">➕ 新增群組...</option>
       </select>
       <input type="text" id="card-text" placeholder="輸入想法... (輸入完點新增同步給全體)">
-      <button class="pixel-btn green full" id="add-card-btn" onclick="addCard()">➕ 新增便利貼</button>
+      <button class="pixel-btn green full" onclick="addCard()">➕ 新增便利貼</button>
     </div>
 
     <div class="view-toggle-row">
@@ -568,6 +582,10 @@
     let currentPromptTileIndex = null;
     let votingActive = false;
     let votingDone = false;
+    // 投票結束後的解法階段：提出解法 →（房主選擇）投票選解法 → 定案
+    let solutionVotingActive = false;
+    let solutionsFinal = false;
+    let solutionVotesPerPerson = 2;
     let boardViewMode = 'category'; // 'category' 依分類欄位 | 'group' 依群組跨分類整合
     let votesPerPerson = 3;
 
@@ -738,6 +756,10 @@
         votingActive = !!voting.active;
         votingDone = !!voting.done;
         votesPerPerson = typeof voting.perPerson === 'number' ? voting.perPerson : 3;
+        const solutionVoting = data.solutionVoting || {};
+        solutionVotingActive = !!solutionVoting.active;
+        solutionsFinal = !!solutionVoting.done;
+        solutionVotesPerPerson = typeof solutionVoting.perPerson === 'number' ? solutionVoting.perPerson : 2;
         const timer = data.timer || {};
         timerRunning = !!timer.running;
         timerEndAt = typeof timer.endAt === 'number' ? timer.endAt : null;
@@ -1189,25 +1211,106 @@
 
     function endVoting() {
       if (!roomDocRef || !isHost) return;
-      if (!confirm('確定要結束投票嗎？結束後大家就不能再投票，接著針對高票卡片提出行動方案。')) return;
+      if (!confirm('確定要結束投票嗎？結束後大家就不能再投票，接著針對高票的重點提出下個 Sprint 的做法。')) return;
       roomDocRef.update({ voting: { active: false, done: true, perPerson: votesPerPerson } }).catch(reportWriteError);
     }
 
     function reopenVoting() {
       if (!roomDocRef || !isHost) return;
-      roomDocRef.update({ voting: { active: true, done: false, perPerson: votesPerPerson } }).catch(reportWriteError);
+      roomDocRef.update({
+        voting: { active: true, done: false, perPerson: votesPerPerson },
+        solutionVoting: { active: false, done: false, perPerson: solutionVotesPerPerson }
+      }).catch(reportWriteError);
     }
 
-    // 投票結束後，從結果清單直接幫某張卡開一個行動方案
-    function proposeActionFor(cardId) {
-      const typeSel = document.getElementById('card-type');
-      typeSel.value = 'equip';
-      onCardTypeChange();
-      const refSel = document.getElementById('ref-picker');
-      if (refSel) refSel.value = cardId;
-      const input = document.getElementById('card-text');
-      input.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      input.focus();
+    function startSolutionVoting() {
+      if (!roomDocRef || !isHost) return;
+      if (!solutionCards().length) { alert('還沒有人提出做法喔！'); return; }
+      const input = document.getElementById('solution-votes-input');
+      const n = Math.max(1, Math.min(10, parseInt(input && input.value, 10) || 2));
+      roomDocRef.update({ solutionVoting: { active: true, done: false, perPerson: n } }).catch(reportWriteError);
+    }
+
+    function finalizeSolutions(skipVote) {
+      if (!roomDocRef || !isHost) return;
+      const msg = skipVote ? '不投票，直接把目前提出的做法全部定案為行動方案？' : '結束投票並定案行動方案？';
+      if (!confirm(msg)) return;
+      roomDocRef.update({ solutionVoting: { active: false, done: true, perPerson: solutionVotesPerPerson } }).catch(reportWriteError);
+    }
+
+    function backToProposing() {
+      if (!roomDocRef || !isHost) return;
+      roomDocRef.update({ solutionVoting: { active: false, done: false, perPerson: solutionVotesPerPerson } }).catch(reportWriteError);
+    }
+
+    function solutionCards() {
+      return cards.filter(c => c.type === 'equip');
+    }
+
+    function solutionVotersOf(card) {
+      return Array.isArray(card.solutionVoters) ? card.solutionVoters : [];
+    }
+
+    function mySolutionVotesUsed() {
+      return solutionCards().filter(c => solutionVotersOf(c).some(v => v.id === myId)).length;
+    }
+
+    function voteSolution(id) {
+      const card = cards.find(c => String(c.id) === String(id));
+      if (!card || !cardsRef || !solutionVotingActive) return;
+      const voters = solutionVotersOf(card);
+      const already = voters.some(v => v.id === myId);
+      if (!already && mySolutionVotesUsed() >= solutionVotesPerPerson) { alert('你的票數已經用完囉！'); return; }
+      const updated = already ? voters.filter(v => v.id !== myId) : voters.concat([{ id: myId, name: myName || '匿名玩家' }]);
+      cardsRef.doc(String(id)).update({ solutionVoters: updated }).catch(reportWriteError);
+    }
+
+    function solutionVotingProgress() {
+      const need = Math.min(solutionVotesPerPerson, solutionCards().length);
+      const finished = playerStatuses.filter(p =>
+        solutionCards().filter(c => solutionVotersOf(c).some(v => v.id === p.id)).length >= need
+      ).length;
+      return { need, finished, total: playerStatuses.length };
+    }
+
+    function checkAutoEndSolutionVoting() {
+      if (!roomDocRef || !solutionVotingActive || solutionsFinal) return;
+      const { need, finished, total } = solutionVotingProgress();
+      if (need > 0 && total > 0 && finished >= total) {
+        roomDocRef.update({ solutionVoting: { active: false, done: true, perPerson: solutionVotesPerPerson } }).catch(reportWriteError);
+      }
+    }
+
+    // 解法板上的輸入框：直接針對某張卡提出解法（refCardId 為空代表不針對特定卡片）
+    function submitSolution(refCardId) {
+      const input = document.getElementById(`solution-input-${refCardId || 'other'}`);
+      const text = input ? input.value.trim() : '';
+      if (!text) return;
+      createCard('equip', text, refCardId || null, '');
+      input.value = '';
+    }
+
+    function solutionItemHtml(sol, tagMap, winnerIds) {
+      const voters = solutionVotersOf(sol);
+      const voted = voters.some(v => v.id === myId);
+      const outOfVotes = mySolutionVotesUsed() >= solutionVotesPerPerson;
+      const voteBtn = solutionVotingActive
+        ? `<button class="vote-btn ${voted ? 'voted' : ''}" ${(!voted && outOfVotes) ? 'disabled' : ''} onclick="voteSolution('${sol.id}')">${voted ? '✓ 已投' : '👍 投這個'}</button>`
+        : '';
+      const showVoters = (solutionVotingActive || solutionsFinal) && voters.length;
+      const voterLine = showVoters
+        ? `<div class="voter-list">* ${voters.map(v => `<span class="voter-name">${escapeHtml(v.name || '匿名玩家')}</span>`).join(', ')} 投了這個（${voters.length}）</div>`
+        : '';
+      const isWinner = winnerIds.has(sol.id);
+      return `
+        <div class="solution-item ${isWinner ? 'winner' : ''}">
+          <div class="solution-row">
+            <div>${isWinner ? '🏆 ' : '💡 '}<span class="card-tag-inline" onclick="jumpToCard('${sol.id}')">#${tagMap[sol.id] || '?'}</span> ${escapeHtml(sol.text)}
+              <span class="solution-author">— ${escapeHtml(sol.author || '匿名玩家')}</span></div>
+            ${voteBtn}
+          </div>
+          ${voterLine}
+        </div>`;
     }
 
     function renderVotingResults() {
@@ -1216,55 +1319,124 @@
       if (!(cardsRef && votingDone)) { panel.style.display = 'none'; return; }
       panel.style.display = 'block';
 
-      const tagMap = computeAllTags();
-      const ranked = cards
-        .filter(c => c.type !== 'equip' && Array.isArray(c.voters) && c.voters.length > 0)
-        .sort((a, b) => b.voters.length - a.voters.length || (a.ts || 0) - (b.ts || 0));
+      // 重繪會清掉輸入框，先記下大家正在打的字和游標位置
+      const drafts = {};
+      panel.querySelectorAll('.solution-input input').forEach(el => { drafts[el.id] = el.value; });
+      const focusedId = document.activeElement && panel.contains(document.activeElement) ? document.activeElement.id : null;
 
-      let html = `<div class="voting-results-title">🏆 投票結果</div>`;
-      if (!ranked.length) html += `<div class="result-meta">這次沒有人投票。</div>`;
+      const tagMap = computeAllTags();
+      const proposing = !solutionVotingActive && !solutionsFinal;
+      const solVotes = c => solutionVotersOf(c).length;
+      const sortSolutions = list => (solutionVotingActive || solutionsFinal)
+        ? list.slice().sort((a, b) => solVotes(b) - solVotes(a) || (a.ts || 0) - (b.ts || 0))
+        : list.slice().sort((a, b) => (a.ts || 0) - (b.ts || 0));
+
+      // 有人投票的亮點/阻礙依票數排序；都沒人投就列出全部亮點/阻礙
+      let problems = cards.filter(c => (c.type === 'trap' || c.type === 'gold') && Array.isArray(c.voters) && c.voters.length > 0);
+      if (!problems.length) problems = cards.filter(c => c.type === 'trap' || c.type === 'gold');
+      problems.sort((a, b) => (b.voters || []).length - (a.voters || []).length || (a.ts || 0) - (b.ts || 0));
+      const problemIds = new Set(problems.map(c => c.id));
+      const others = solutionCards().filter(c => !c.refCardId || !problemIds.has(c.refCardId));
+
+      // 定案時，每個問題票數最高的解法（有票才算）標成 🏆
+      const winnerIds = new Set();
+      if (solutionsFinal) {
+        const groups = problems.map(p => solutionCards().filter(c => c.refCardId === p.id)).concat([others]);
+        groups.forEach(list => {
+          const top = Math.max(0, ...list.map(solVotes));
+          if (top > 0) list.filter(c => solVotes(c) === top).forEach(c => winnerIds.add(c.id));
+        });
+      }
+
+      let title, sub;
+      if (solutionsFinal) {
+        title = '⚔️ 下個 Sprint 的行動方案';
+        sub = winnerIds.size ? '🏆 是每一項得票最高的做法，下次 Retro 記得回來檢查有沒有做到！' : '以下就是這次 Retro 的行動方案，下次 Retro 記得回來檢查有沒有做到！';
+      } else if (solutionVotingActive) {
+        const remaining = Math.max(0, solutionVotesPerPerson - mySolutionVotesUsed());
+        const { finished, total } = solutionVotingProgress();
+        title = '🗳️ 選出下個 Sprint 要做的';
+        sub = (remaining > 0 ? `你還剩 ${remaining} / ${solutionVotesPerPerson} 票，投給你覺得下個 Sprint 最該做的` : '✅ 你的票投完了，等大家投完就會定案')
+          + `（${finished} / ${total} 人已投完）`;
+      } else {
+        title = '💡 下個 Sprint 可以怎麼做？';
+        sub = '大家票選出來的重點依票數排序。阻礙想想怎麼改善、亮點想想怎麼保持，每個人都可以提，提出來的會成為行動方案。';
+      }
+
+      let html = `<div class="voting-results-title">${title}</div><div class="voting-results-sub">${sub}</div>`;
+
       let rank = 0, prevCount = null;
-      ranked.forEach((c, i) => {
-        if (c.voters.length !== prevCount) { rank = i + 1; prevCount = c.voters.length; }
-        const names = c.voters.map(v => escapeHtml(v.name || '匿名玩家')).join(', ');
-        const actions = cards.filter(a => a.type === 'equip' && a.refCardId === c.id);
-        const actionText = actions.length
-          ? `⚔️ 已有行動方案：${actions.map(a => '#' + (tagMap[a.id] || '?')).join(' ')}`
-          : (c.type === 'trap' ? '⚠️ 還沒有行動方案' : '');
-        const canPropose = c.type === 'gold' || c.type === 'trap';
+      problems.forEach((p, i) => {
+        const count = (p.voters || []).length;
+        if (count !== prevCount) { rank = i + 1; prevCount = count; }
+        const sols = sortSolutions(solutionCards().filter(c => c.refCardId === p.id));
+        const names = (p.voters || []).map(v => escapeHtml(v.name || '匿名玩家')).join(', ');
+        const isTrap = p.type === 'trap';
         html += `
-          <div class="result-row">
-            <div class="result-rank">${rank}.</div>
-            <div class="result-body">
-              <span class="card-tag-inline" onclick="jumpToCard('${c.id}')">#${tagMap[c.id] || '?'}</span>${escapeHtml(c.text)}
-              <div class="result-meta">${c.voters.length} 票 · ${names}${actionText ? '<br>' + actionText : ''}</div>
+          <div class="problem-block ${isTrap ? '' : 'kind-gold'}">
+            <div class="problem-head">
+              <span class="problem-rank">${rank}.</span>
+              <span class="problem-kind">${isTrap ? '👾 阻礙' : '🪙 亮點'}</span>
+              <span class="problem-text"><span class="card-tag-inline" onclick="jumpToCard('${p.id}')">#${tagMap[p.id] || '?'}</span>${escapeHtml(p.text)}</span>
             </div>
-            ${canPropose ? `<button class="pixel-btn green" onclick="proposeActionFor('${c.id}')">⚔️ 提行動方案</button>` : ''}
+            <div class="problem-votes">${count} 票${names ? ' · ' + names : ''}</div>
+            <div class="solution-label">${isTrap ? '💡 下個 Sprint 怎麼改善？' : '💡 下個 Sprint 怎麼保持？'}</div>
+            ${sols.length ? sols.map(sol => solutionItemHtml(sol, tagMap, winnerIds)).join('') : '<div class="solution-empty">還沒有人提出做法</div>'}
+            ${proposing ? `
+              <div class="solution-input">
+                <input type="text" id="solution-input-${p.id}" placeholder="${isTrap ? '下個 Sprint 我們可以…' : '下個 Sprint 繼續…'}" onkeydown="if(event.key==='Enter' && !event.isComposing) submitSolution('${p.id}')">
+                <button class="pixel-btn green" onclick="submitSolution('${p.id}')">提出</button>
+              </div>` : ''}
           </div>`;
       });
-      if (isHost) html += `<div style="margin-top:10px;"><button class="pixel-btn" onclick="reopenVoting()">↩️ 重新開放投票</button></div>`;
+
+      if (proposing || others.length) {
+        html += `
+          <div class="problem-block kind-other">
+            <div class="problem-head"><span class="problem-text">其他想嘗試的改變</span></div>
+            ${others.length ? sortSolutions(others).map(sol => solutionItemHtml(sol, tagMap, winnerIds)).join('') : ''}
+            ${proposing ? `
+              <div class="solution-input">
+                <input type="text" id="solution-input-other" placeholder="下個 Sprint 想試試…" onkeydown="if(event.key==='Enter' && !event.isComposing) submitSolution(null)">
+                <button class="pixel-btn green" onclick="submitSolution(null)">提出</button>
+              </div>` : ''}
+          </div>`;
+      }
+
+      if (isHost) {
+        html += `<div class="host-controls"><div style="font-weight:bold; color: var(--accent-pink);">👑 房主控制</div>`;
+        if (proposing) {
+          html += `
+            <div class="net-row">每人可投 <input type="number" id="solution-votes-input" min="1" max="10" value="${solutionVotesPerPerson}"> 票
+              <button class="pixel-btn green" onclick="startSolutionVoting()">🗳️ 投票選行動方案</button></div>
+            <div class="net-row"><button class="pixel-btn yellow" onclick="finalizeSolutions(true)">✅ 不投票，直接定案</button>
+              <button class="pixel-btn" onclick="reopenVoting()">↩️ 回到票選重點</button></div>`;
+        } else if (solutionVotingActive) {
+          html += `<div class="net-row"><button class="pixel-btn yellow" onclick="finalizeSolutions(false)">🏁 結束投票並定案</button>
+            <button class="pixel-btn" onclick="backToProposing()">↩️ 回到提做法</button></div>`;
+        } else {
+          html += `<div class="net-row"><button class="pixel-btn" onclick="backToProposing()">↩️ 回到提做法</button></div>`;
+        }
+        html += `</div>`;
+      } else if (proposing) {
+        html += `<div class="voting-results-sub">⏳ 大家提完後，房主會決定要投票選出行動方案，還是全部直接定案。</div>`;
+      }
+
       panel.innerHTML = html;
+      Object.keys(drafts).forEach(id => { const el = document.getElementById(id); if (el) el.value = drafts[id]; });
+      if (focusedId) { const el = document.getElementById(focusedId); if (el) { el.focus(); if (el.value) el.setSelectionRange(el.value.length, el.value.length); } }
+      checkAutoEndSolutionVoting();
     }
 
     function myVotesUsed() {
       return cards.filter(c => Array.isArray(c.voters) && c.voters.some(v => v.id === myId)).length;
     }
 
-    // 寫便利貼 → 投票中（隱藏新增區）→ 投票結束（只能新增行動方案）
+    // 寫便利貼階段才顯示新增區；投票中隱藏；投票結束後改在解法板上直接提解法
     function updateAddCardLock() {
-      const voting = !!(cardsRef && votingActive);
-      const actionOnly = !!(cardsRef && votingDone);
+      const hide = !!(cardsRef && (votingActive || votingDone));
       const section = document.getElementById('card-input-section');
-      const msg = document.getElementById('action-only-msg');
-      const typeSel = document.getElementById('card-type');
-      if (section) section.style.display = voting ? 'none' : '';
-      if (msg) msg.style.display = actionOnly ? 'block' : 'none';
-      const addBtn = document.getElementById('add-card-btn');
-      if (addBtn) addBtn.innerText = actionOnly ? '⚔️ 新增行動方案' : '➕ 新增便利貼';
-      if (typeSel) {
-        typeSel.style.display = actionOnly ? 'none' : '';
-        if (actionOnly && typeSel.value !== 'equip') { typeSel.value = 'equip'; onCardTypeChange(); }
-      }
+      if (section) section.style.display = hide ? 'none' : '';
     }
 
     function updateVotingUI() {
@@ -1470,8 +1642,7 @@
       const input = document.getElementById('card-text');
       const text = input.value.trim();
       if (!text) return;
-      if (cardsRef && votingActive) { alert('投票進行中，已經不能再新增便利貼囉！'); return; }
-      if (cardsRef && votingDone && type !== 'equip') { alert('投票已結束，現在只能新增行動方案。'); return; }
+      if (cardsRef && (votingActive || votingDone)) { alert('投票已經開始，不能再新增便利貼囉！'); return; }
 
       const refSel = document.getElementById('ref-picker');
       const refCardId = (type === 'equip' && refSel && refSel.value) ? refSel.value : null;
@@ -1487,6 +1658,15 @@
         }
       }
 
+      createCard(type, text, refCardId, groupName);
+      input.value = '';
+      if (refSel) refSel.value = '';
+      if (groupSel) groupSel.value = '';
+
+      if (window.innerWidth < 768) switchTab(type);
+    }
+
+    function createCard(type, text, refCardId, groupName) {
       const payload = { type, text, voters: [], author: myName || '匿名玩家', group: groupName, ts: Date.now(), refCardId };
 
       if (cardsRef) {
@@ -1511,11 +1691,6 @@
         cards.push({ id: String(Date.now()), ...payload, tag: `${BOARD_TAG_PREFIX[type]}${num}` });
         renderCards();
       }
-      input.value = '';
-      if (refSel) refSel.value = '';
-      if (groupSel) groupSel.value = '';
-
-      if (window.innerWidth < 768) switchTab(type);
     }
 
     function voteCard(id) {
@@ -1871,6 +2046,8 @@
               const refCard = cards.find(c => c.id === i.refCardId);
               if (refCard) line += ` — 回應 [${tagMap[refCard.id] || '?'}] ${refCard.text}`;
             }
+            const solVoters = solutionVotersOf(i);
+            if (solVoters.length) line += ` (行動方案票: ${solVoters.length} - ${solVoters.map(v => v.name || '匿名玩家').join(', ')})`;
             const backRefs = cards.filter(c => c.type === 'equip' && c.refCardId === i.id);
             if (backRefs.length) line += ` — 行動方案: ${backRefs.map(c => '[' + (tagMap[c.id] || '?') + ']').join(' ')}`;
             md += line + `\n`;
