@@ -260,7 +260,11 @@
     }
     .card-author-name { font-weight: bold; color: var(--accent-yellow); font-size: 0.85rem; margin-bottom: 2px; }
     .card-ref { font-size: 0.75rem; color: var(--accent-cyan); margin-top: 6px; background: rgba(139,233,253,0.08); padding: 4px 6px; border-radius: 3px; }
-    .voter-list { font-size: 0.72rem; color: #b3b6c9; margin-top: 6px; font-style: italic; }
+    .voter-list { font-size: 0.75rem; color: #b3b6c9; margin-top: 6px; }
+    .voter-list .voter-name { color: var(--accent-yellow); }
+    .card-ref, .card-backref { cursor: pointer; }
+    .card-backref { font-size: 0.75rem; color: var(--accent-green); margin-top: 6px; background: rgba(80,250,123,0.08); padding: 4px 6px; border-radius: 3px; }
+    .card.flash { outline: 2px solid var(--accent-yellow); transition: outline 0.2s; }
     .card-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; gap: 6px; flex-wrap: wrap; }
     .group-select { background: #191a21; border: 1px solid #6272a4; color: var(--accent-cyan); padding: 4px 6px; font-size: 0.78rem; cursor: pointer; border-radius: 3px; max-width: 130px; }
     .vote-btn { background: #191a21; border: 1px solid #6272a4; color: var(--text-color); padding: 4px 10px; font-size: 0.85rem; cursor: pointer; }
@@ -1376,6 +1380,7 @@
     function renderSingleCardEl(card, voteLocked, tagMap, existingGroupsForType) {
       const cardEl = document.createElement('div');
       cardEl.className = 'card';
+      cardEl.dataset.cardId = card.id;
 
       const tag = tagMap[card.id] || '?';
       const authorName = escapeHtml(card.author || '匿名玩家');
@@ -1423,6 +1428,20 @@
         ${voterLine}
       `;
       return cardEl;
+    }
+
+    function jumpToCard(id, retried) {
+      const els = Array.from(document.querySelectorAll(`.card[data-card-id="${id}"]`)).filter(el => el.offsetParent !== null);
+      if (!els.length) {
+        // 手機版一次只顯示一欄，先切到目標卡片所在的分頁
+        const target = cards.find(c => c.id === id);
+        if (target && !retried) { switchTab(target.type); setTimeout(() => jumpToCard(id, true), 50); }
+        return;
+      }
+      const el = els[0];
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.classList.add('flash');
+      setTimeout(() => el.classList.remove('flash'), 1200);
     }
 
     function toggleBoardView() {
