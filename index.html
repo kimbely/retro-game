@@ -1386,15 +1386,21 @@
         if (refCard) {
           const refTag = tagMap[refCard.id] || '?';
           const refPreview = refCard.text.length > 24 ? refCard.text.slice(0, 24) + '…' : refCard.text;
-          refLine = `<div class="card-ref">🔗 回應 [${refTag}] ${escapeHtml(refPreview)}</div>`;
+          refLine = `<div class="card-ref" onclick="jumpToCard('${refCard.id}')">🔗 回應 #${refTag} ${escapeHtml(refPreview)}</div>`;
         }
       }
 
       const voters = Array.isArray(card.voters) ? card.voters : [];
       const voted = voters.some(v => v.id === myId);
-      const voterNames = voters.map(v => escapeHtml(v.name || '匿名玩家'));
+      const voterNames = voters.map(v => `<span class="voter-name">${escapeHtml(v.name || '匿名玩家')}</span>`);
       const voterLine = voterNames.length
-        ? `<div class="voter-list">* ${voterNames.join('、')} 按了讚</div>`
+        ? `<div class="voter-list">* ${voterNames.join(', ')} 按了讚（${voterNames.length}）</div>`
+        : '';
+
+      // 反向關聯：哪些行動方案是為了這張卡而提出的
+      const backRefs = cards.filter(c => c.type === 'equip' && c.refCardId === card.id);
+      const backRefLine = backRefs.length
+        ? `<div class="card-backref">⚔️ 行動方案：${backRefs.map(c => `<span onclick="event.stopPropagation(); jumpToCard('${c.id}')">#${tagMap[c.id] || '?'}</span>`).join(' ')}</div>`
         : '';
 
       let groupOptions = `<option value="" ${!card.group ? 'selected' : ''}>（未分組）</option>`;
@@ -1408,8 +1414,9 @@
         <div class="card-author-name">${authorName}：</div>
         <div>${escapeHtml(card.text)}</div>
         ${refLine}
+        ${backRefLine}
         <div class="card-footer">
-          <button class="vote-btn ${voted ? 'voted' : ''}" ${(voteLocked && !voted) ? 'disabled' : ''} onclick="voteCard('${card.id}')">❤️ ${voters.length}</button>
+          <button class="vote-btn ${voted ? 'voted' : ''}" ${(voteLocked && !voted) ? 'disabled' : ''} onclick="voteCard('${card.id}')">${voted ? '✓ 已讚' : '👍 讚'}</button>
           <select class="group-select" onchange="onGroupSelectChange('${card.id}', this)">${groupOptions}</select>
           <span class="del-btn" onclick="deleteCard('${card.id}')">刪除</span>
         </div>
