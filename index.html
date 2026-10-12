@@ -437,7 +437,8 @@
     <div class="net-status" id="voting-wait-msg" style="display:none;">⏳ 便利貼寫完後，等待房主開始投票...</div>
     <div class="net-status" id="voting-budget-msg" style="display:none;"></div>
 
-    <div class="input-section">
+    <div class="input-section" id="card-input-section">
+      <div id="add-locked-msg" class="field-label" style="display:none; color: var(--accent-yellow);">🔒 投票進行中，暫停新增便利貼</div>
       <select id="card-type" onchange="onCardTypeChange()">
         <option value="gold">🪙 金幣寶箱 (做得好的亮點)</option>
         <option value="trap">👾 泥濘陷阱 (踩到的坑/阻礙)</option>
@@ -1174,7 +1175,16 @@
       return cards.filter(c => Array.isArray(c.voters) && c.voters.some(v => v.id === myId)).length;
     }
 
+    function updateAddCardLock() {
+      const locked = !!(cardsRef && votingActive);
+      const section = document.getElementById('card-input-section');
+      const msg = document.getElementById('add-locked-msg');
+      if (msg) msg.style.display = locked ? 'block' : 'none';
+      if (section) section.querySelectorAll('select, input, button').forEach(el => { el.disabled = locked; });
+    }
+
     function updateVotingUI() {
+      updateAddCardLock();
       const setupPanel = document.getElementById('voting-setup');
       const waitMsg = document.getElementById('voting-wait-msg');
       const budgetMsg = document.getElementById('voting-budget-msg');
@@ -1264,13 +1274,38 @@
 
     const BOARD_TAG_PREFIX = { gold: 'G', trap: 'T', potion: 'P', equip: 'E' };
 
+    function tagNumOf(card) {
+      const m = /^[A-Z](\d+)$/.exec(card.tag || '');
+      return m ? parseInt(m[1], 10) : 0;
+    }
+
+    function maxTagNum(type) {
+      return cards.filter(c => c.type === type).reduce((max, c) => Math.max(max, tagNumOf(c)), 0);
+    }
+
+    // 編號在新增時就存進卡片（card.tag），刪卡不會讓其他卡重新編號。
+    // 舊資料沒有 tag 的卡片，依時間順序補上還沒被用掉的號碼。
     function computeAllTags() {
       const map = {};
       ['gold', 'trap', 'potion', 'equip'].forEach(type => {
-        const sorted = cards.filter(c => c.type === type).slice().sort((a, b) => (a.ts || 0) - (b.ts || 0));
-        sorted.forEach((c, i) => { map[c.id] = `${BOARD_TAG_PREFIX[type]}${i + 1}`; });
+        const ofType = cards.filter(c => c.type === type);
+        const used = new Set();
+        ofType.forEach(c => { const n = tagNumOf(c); if (n) { map[c.id] = c.tag; used.add(n); } });
+        let next = 1;
+        ofType.filter(c => !tagNumOf(c)).sort((a, b) => (a.ts || 0) - (b.ts || 0)).forEach(c => {
+          while (used.has(next)) next++;
+          used.add(next);
+          map[c.id] = `${BOARD_TAG_PREFIX[type]}${next}`;
+        });
       });
       return map;
+    }
+
+    // 舊卡片沒有存 tag，computeAllTags 會幫它們補號；新卡號碼要排在這些補號之後
+    function computeLegacyCount(type) {
+      const map = computeAllTags();
+      return cards.filter(c => c.type === type && !tagNumOf(c))
+        .reduce((max, c) => Math.max(max, parseInt((map[c.id] || '').slice(1), 10) || 0), 0);
     }
 
     function onCardTypeChange() {
@@ -1320,6 +1355,7 @@
       const input = document.getElementById('card-text');
       const text = input.value.trim();
       if (!text) return;
+      if (cardsRef && votingActive) { alert('投票進行中，已經不能再新增便利貼囉！'); return; }
 
       const refSel = document.getElementById('ref-picker');
       const refCardId = (type === 'equip' && refSel && refSel.value) ? refSel.value : null;
@@ -1339,9 +1375,24 @@
 
       if (cardsRef) {
         const id = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
-        cardsRef.doc(id).set(payload).catch(reportWriteError);
+        // 用房間文件上的計數器在 transaction 裡配號，避免兩人同時新增拿到同一個號碼。
+        // 取「計數器」和「目前卡片最大號碼」較大者，房間文件被 set() 覆蓋或舊資料沒有計數器時也不會撞號。
+        const prefix = BOARD_TAG_PREFIX[type];
+        db.runTransaction(async (tx) => {
+          const roomSnap = await tx.get(roomDocRef);
+          const counters = (roomSnap.exists && roomSnap.data().tagCounters) || {};
+          const num = Math.max(counters[type] || 0, maxTagNum(type), computeLegacyCount(type)) + 1;
+          tx.set(roomDocRef, { tagCounters: { [type]: num } }, { merge: true });
+          // 順便把舊卡片目前的補號寫回去，之後刪卡也不會再變號
+          const legacyMap = computeAllTags();
+          cards.filter(c => !tagNumOf(c)).forEach(c => tx.update(cardsRef.doc(String(c.id)), { tag: legacyMap[c.id] }));
+          tx.set(cardsRef.doc(id), { ...payload, tag: `${prefix}${num}` });
+        }).catch(reportWriteError);
       } else {
-        cards.push({ id: String(Date.now()), ...payload });
+        const legacyMap = computeAllTags();
+        cards.filter(c => !tagNumOf(c)).forEach(c => { c.tag = legacyMap[c.id]; });
+        const num = maxTagNum(type) + 1;
+        cards.push({ id: String(Date.now()), ...payload, tag: `${BOARD_TAG_PREFIX[type]}${num}` });
         renderCards();
       }
       input.value = '';
