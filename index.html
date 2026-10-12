@@ -468,7 +468,7 @@
         <option value="__new__">➕ 新增群組...</option>
       </select>
       <input type="text" id="card-text" placeholder="輸入想法... (輸入完點新增同步給全體)">
-      <button class="pixel-btn green full" onclick="addCard()">➕ 新增便利貼</button>
+      <button class="pixel-btn green full" id="add-card-btn" onclick="addCard()">➕ 新增便利貼</button>
     </div>
 
     <div class="view-toggle-row">
@@ -1258,6 +1258,8 @@
       const typeSel = document.getElementById('card-type');
       if (section) section.style.display = voting ? 'none' : '';
       if (msg) msg.style.display = actionOnly ? 'block' : 'none';
+      const addBtn = document.getElementById('add-card-btn');
+      if (addBtn) addBtn.innerText = actionOnly ? '⚔️ 新增行動方案' : '➕ 新增便利貼';
       if (typeSel) {
         typeSel.style.display = actionOnly ? 'none' : '';
         if (actionOnly && typeSel.value !== 'equip') { typeSel.value = 'equip'; onCardTypeChange(); }
