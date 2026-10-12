@@ -757,7 +757,7 @@
 
       unsubCards = cardsRef.onSnapshot((qsnap) => {
         cards = qsnap.docs.map(d => ({ id: d.id, ...(d.data() || {}) }));
-        renderCards();
+        updateVotingUI();
       }, (err) => {
         showGlobalError(`便利貼同步發生問題（${err.code || err.message}），請重新輸入房間號碼再試一次。`);
       });
@@ -774,6 +774,7 @@
             ts: typeof data.ts === 'number' ? data.ts : 0
           };
         });
+        if (votingActive) updateVotingUI();
         const me = playerStatuses.find(p => p.id === myId);
         if (me) {
           myMapDone = !!me.mapDone;
@@ -1299,10 +1300,32 @@
         setupPanel.style.display = 'none';
         waitMsg.style.display = 'none';
         const remaining = Math.max(0, votesPerPerson - myVotesUsed());
+        const { finished, total } = votingProgress();
         budgetMsg.style.display = 'block';
-        budgetMsg.innerText = `🗳️ 你還剩 ${remaining} / ${votesPerPerson} 票，點便利貼上的 👍 投票`;
+        budgetMsg.innerText = (remaining > 0
+          ? `🗳️ 你還剩 ${remaining} / ${votesPerPerson} 票，點便利貼上的 👍 投票`
+          : `✅ 你的票投完了，等大家投完就會公布結果`) + `（${finished} / ${total} 人已投完）`;
+        checkAutoEndVoting();
       }
       renderCards();
+    }
+
+    // 每人要投的票數：便利貼比票數少時，投滿所有便利貼就算投完
+    function votingProgress() {
+      const need = Math.min(votesPerPerson, cards.length);
+      const finished = playerStatuses.filter(p =>
+        cards.filter(c => Array.isArray(c.voters) && c.voters.some(v => v.id === p.id)).length >= need
+      ).length;
+      return { need, finished, total: playerStatuses.length };
+    }
+
+    // 所有人都投完就自動結束投票（任何人的畫面偵測到都會寫入，重複寫入結果相同）
+    function checkAutoEndVoting() {
+      if (!roomDocRef || !votingActive || votingDone) return;
+      const { need, finished, total } = votingProgress();
+      if (need > 0 && total > 0 && finished >= total) {
+        roomDocRef.update({ voting: { active: false, done: true, perPerson: votesPerPerson } }).catch(reportWriteError);
+      }
     }
 
     function hostAdvanceToBoard() {
