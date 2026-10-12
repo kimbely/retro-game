@@ -283,6 +283,11 @@
     .del-btn.disabled { opacity: 0.35; pointer-events: none; }
 
     .voting-setup { background: #282a36; border: 2px solid var(--accent-pink); padding: 12px; margin-bottom: 12px; }
+    .confirm-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: none; align-items: center; justify-content: center; z-index: 9999; padding: 16px; }
+    .confirm-overlay.open { display: flex; }
+    .confirm-box { background: #282a36; border: 3px solid var(--accent-yellow); box-shadow: 4px 4px 0 #000; padding: 16px; max-width: 420px; width: 100%; }
+    .confirm-msg { white-space: pre-line; font-size: 0.95rem; line-height: 1.5; margin-bottom: 14px; }
+    .confirm-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
     .voting-results { background: #282a36; border: 2px solid var(--accent-yellow); padding: 12px; margin-bottom: 12px; }
     .voting-results-title { font-weight: bold; color: var(--accent-yellow); font-size: 1.05rem; }
     .voting-results-sub { font-size: 0.8rem; color: #b3b6c9; margin: 4px 0 12px; }
@@ -596,6 +601,27 @@
 
     function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 
+    // 不用瀏覽器內建的 confirm()：Chrome 勾了「禁止這個網頁建立其他對話方塊」或在 LINE/Slack 內開啟時，
+    // confirm() 會直接回傳 false，按鈕看起來就像沒反應
+    function showConfirm(message) {
+      return new Promise(resolve => {
+        const overlay = document.getElementById('confirm-overlay');
+        const okBtn = document.getElementById('confirm-ok');
+        const cancelBtn = document.getElementById('confirm-cancel');
+        document.getElementById('confirm-msg').innerText = message;
+        const close = (result) => {
+          overlay.classList.remove('open');
+          okBtn.onclick = null; cancelBtn.onclick = null; overlay.onclick = null;
+          resolve(result);
+        };
+        okBtn.onclick = () => close(true);
+        cancelBtn.onclick = () => close(false);
+        overlay.onclick = (e) => { if (e.target === overlay) close(false); };
+        overlay.classList.add('open');
+        okBtn.focus();
+      });
+    }
+
     function showGlobalError(msg) {
       const banner = document.getElementById('global-error-banner');
       if (banner) {
@@ -853,7 +879,7 @@
 
     async function closeRoom() {
       if (!roomDocRef || !isHost) return;
-      if (!confirm('確定要結束這場 Retro 嗎？\n\n房間裡所有便利貼、投票、行動方案都會從資料庫永久刪除，所有人都會被送回首頁。\n\n還沒存紀錄的話，請先按「📋 複製 Markdown」或「📥 下載 .md 檔案」。')) return;
+      if (!await showConfirm('確定要結束這場 Retro 嗎？\n\n房間裡所有便利貼、投票、行動方案都會從資料庫永久刪除，所有人都會被送回首頁。\n\n還沒存紀錄的話，請先按「📋 複製 Markdown」或「📥 下載 .md 檔案」。')) return;
 
       const roomRef = roomDocRef;
       try {
@@ -936,9 +962,9 @@
       }).catch(reportWriteError);
     }
 
-    function claimHost() {
+    async function claimHost() {
       if (!roomDocRef || !myId) return;
-      if (!confirm("確定要接管成為這個房間的房主嗎？（適用於原本的房主身份已經失效、卡在等待畫面的情況）")) return;
+      if (!await showConfirm("確定要接管成為這個房間的房主嗎？（適用於原本的房主身份已經失效、卡在等待畫面的情況）")) return;
       roomDocRef.set({
         hostId: myId,
         phase: roomPhase,
@@ -1296,9 +1322,9 @@
       roomDocRef.update({ voting: { active: true, done: false, perPerson: n } }).catch(reportWriteError);
     }
 
-    function endVoting() {
+    async function endVoting() {
       if (!roomDocRef || !isHost) return;
-      if (!confirm('確定要結束投票嗎？結束後大家就不能再投票，接著針對高票的重點提出下個 Sprint 的做法。')) return;
+      if (!await showConfirm('確定要結束投票嗎？結束後大家就不能再投票，接著針對高票的重點提出下個 Sprint 的做法。')) return;
       roomDocRef.update({ voting: { active: false, done: true, perPerson: votesPerPerson } }).catch(reportWriteError);
     }
 
@@ -1318,10 +1344,10 @@
       roomDocRef.update({ solutionVoting: { active: true, done: false, perPerson: n } }).catch(reportWriteError);
     }
 
-    function finalizeSolutions(skipVote) {
+    async function finalizeSolutions(skipVote) {
       if (!roomDocRef || !isHost) return;
       const msg = skipVote ? '不投票，直接把目前提出的做法全部定案為行動方案？' : '結束投票並定案行動方案？';
-      if (!confirm(msg)) return;
+      if (!await showConfirm(msg)) return;
       roomDocRef.update({ solutionVoting: { active: false, done: true, perPerson: solutionVotesPerPerson } }).catch(reportWriteError);
     }
 
@@ -2170,5 +2196,14 @@
     loadLocalName();
     initSync();
   </script>
+  <div class="confirm-overlay" id="confirm-overlay">
+    <div class="confirm-box">
+      <div class="confirm-msg" id="confirm-msg"></div>
+      <div class="confirm-actions">
+        <button class="pixel-btn" id="confirm-cancel">取消</button>
+        <button class="pixel-btn yellow" id="confirm-ok">確定</button>
+      </div>
+    </div>
+  </div>
 </body>
 </html>
