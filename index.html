@@ -447,6 +447,7 @@
         <button class="pixel-btn yellow" onclick="copyMarkdown()">📋 複製 Markdown</button>
         <button class="pixel-btn pink" onclick="downloadMarkdownFile()">📥 下載 .md 檔案</button>
       </div>
+      <button class="pixel-btn full" id="close-room-btn" onclick="closeRoom()" style="display:none; margin-top:8px; background: var(--accent-red);">🧹 結束 Retro 並刪除房間資料（房主）</button>
     </div>
 
     <div class="voting-setup" id="voting-setup">
@@ -661,7 +662,8 @@
           hearts: myHearts || 0,
           pos: currentPos || 0,
           mapDone: myMapDone,
-          ts: Date.now()
+          ts: Date.now(),
+          ...expiryField()
         }).catch(reportWriteError);
       }
     }
@@ -706,14 +708,15 @@
 
       try {
         const snap = await roomDocRef.get();
-        if (snap.exists) {
+        // 已關閉但還沒刪乾淨的房間，當成新房間重新開
+        if (snap.exists && !(snap.data() || {}).closed) {
           const data = snap.data() || {};
           isHost = data.hostId === myId;
           roomPhase = data.phase || 'lobby';
         } else {
           isHost = true;
           roomPhase = 'lobby';
-          await roomDocRef.set({ hostId: myId, phase: 'lobby' });
+          await roomDocRef.set({ hostId: myId, phase: 'lobby', ...expiryField() });
         }
       } catch (e) {
         reportWriteError(e);
@@ -745,7 +748,12 @@
       else if (roomPhase === 'started') { onGameStarted(); }
 
       unsubRoomDoc = roomDocRef.onSnapshot((snap) => {
-        const data = snap.exists ? snap.data() : { phase: 'lobby' };
+        if (!snap.exists || (snap.data() || {}).closed) {
+          // 房主自己按的會在 closeRoom 裡處理，這裡只處理其他人
+          if (!isHost) leaveClosedRoom('👋 房主已經結束這場 Retro，房間資料已刪除。');
+          return;
+        }
+        const data = snap.data();
         const prevPhase = roomPhase;
         roomPhase = data.phase || 'lobby';
         isHost = data.hostId === myId;
@@ -829,6 +837,63 @@
 
       if (startBtn) startBtn.style.display = (isHost && roomPhase === 'lobby') ? 'flex' : 'none';
       if (waitMsg) waitMsg.style.display = (!isHost && roomPhase === 'lobby') ? 'block' : 'none';
+      const closeBtn = document.getElementById('close-room-btn');
+      if (closeBtn) closeBtn.style.display = (isHost && roomDocRef) ? 'flex' : 'none';
+    }
+
+    // Firestore TTL 用：每筆資料帶過期時間，房主忘了按刪除也會被自動清掉。
+    // 需要在 Firebase Console 對 rooms / cards / players 三個 collection group 設定 TTL 欄位 expireAt。
+    const ROOM_TTL_MS = 24 * 60 * 60 * 1000;
+    function expiryField() {
+      return { expireAt: firebase.firestore.Timestamp.fromMillis(Date.now() + ROOM_TTL_MS) };
+    }
+
+    async function closeRoom() {
+      if (!roomDocRef || !isHost) return;
+      if (!confirm('確定要結束這場 Retro 嗎？\n\n房間裡所有便利貼、投票、行動方案都會從資料庫永久刪除，所有人都會被送回首頁。\n\n還沒存紀錄的話，請先按「📋 複製 Markdown」或「📥 下載 .md 檔案」。')) return;
+
+      const roomRef = roomDocRef, cardsCol = cardsRef, playersCol = playersRef;
+      try {
+        // 先標記關閉，讓其他人馬上收到通知，再刪子集合，最後刪房間本身
+        await roomRef.update({ closed: true });
+        for (const col of [cardsCol, playersCol]) {
+          const snap = await col.get();
+          // 一個 batch 最多 500 筆
+          for (let i = 0; i < snap.docs.length; i += 400) {
+            const batch = db.batch();
+            snap.docs.slice(i, i + 400).forEach(d => batch.delete(d.ref));
+            await batch.commit();
+          }
+        }
+        await roomRef.delete();
+      } catch (e) {
+        reportWriteError(e);
+        return;
+      }
+      leaveClosedRoom('✅ 房間資料已刪除，這場 Retro 結束了！');
+    }
+
+    // 房間被關閉（或刪除）後，停止同步並回到首頁；不清掉的話，殘留的寫入會把房間重新建立回來
+    function leaveClosedRoom(message) {
+      if (unsubRoomDoc) { unsubRoomDoc(); unsubRoomDoc = null; }
+      if (unsubCards) { unsubCards(); unsubCards = null; }
+      if (unsubPlayers) { unsubPlayers(); unsubPlayers = null; }
+      roomDocRef = null; cardsRef = null; playersRef = null; currentRoomCode = null;
+      isHost = false; roomPhase = 'lobby';
+      cards = []; playerStatuses = [];
+      votingActive = false; votingDone = false; solutionVotingActive = false; solutionsFinal = false;
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('room');
+        history.replaceState(null, '', url.toString());
+      } catch (e) {}
+      document.getElementById('pre-connect-panel').style.display = '';
+      document.getElementById('lobby-panel').style.display = 'none';
+      updateHostUI();
+      updateVotingUI();
+      switchNav('join');
+      updateStatus('連線服務已就緒，輸入暱稱與房間號碼即可開始');
+      if (message) alert(message);
     }
 
     function startGame() {
@@ -839,7 +904,8 @@
         phase: 'started',
         turnOrder: order.length ? order : [myId],
         currentTurnIndex: 0,
-        answeredIds: []
+        answeredIds: [],
+        ...expiryField()
       }).catch(reportWriteError);
     }
 
@@ -851,7 +917,8 @@
         phase: roomPhase,
         turnOrder: turnOrder,
         currentTurnIndex: currentTurnIndex,
-        answeredIds: answeredIds
+        answeredIds: answeredIds,
+        ...expiryField()
       }).catch(reportWriteError);
     }
 
@@ -1176,14 +1243,7 @@
           }
         }
 
-        const payload = { type: cat, text, voters: [], author: myName || '匿名玩家', group: groupName, ts: Date.now(), refCardId: null };
-        if (cardsRef) {
-          const id = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
-          cardsRef.doc(id).set(payload).catch(reportWriteError);
-        } else {
-          cards.push({ id: String(Date.now()), ...payload });
-          renderCards();
-        }
+        createCard(cat, text, null, groupName);
       }
 
       closePromptPanel();
@@ -1678,11 +1738,11 @@
           const roomSnap = await tx.get(roomDocRef);
           const counters = (roomSnap.exists && roomSnap.data().tagCounters) || {};
           const num = Math.max(counters[type] || 0, maxTagNum(type), computeLegacyCount(type)) + 1;
-          tx.set(roomDocRef, { tagCounters: { [type]: num } }, { merge: true });
+          tx.set(roomDocRef, { tagCounters: { [type]: num }, ...expiryField() }, { merge: true });
           // 順便把舊卡片目前的補號寫回去，之後刪卡也不會再變號
           const legacyMap = computeAllTags();
           cards.filter(c => !tagNumOf(c)).forEach(c => tx.update(cardsRef.doc(String(c.id)), { tag: legacyMap[c.id] }));
-          tx.set(cardsRef.doc(id), { ...payload, tag: `${prefix}${num}` });
+          tx.set(cardsRef.doc(id), { ...payload, tag: `${prefix}${num}`, ...expiryField() });
         }).catch(reportWriteError);
       } else {
         const legacyMap = computeAllTags();
