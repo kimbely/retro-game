@@ -713,6 +713,7 @@
           const data = snap.data() || {};
           isHost = data.hostId === myId;
           roomPhase = data.phase || 'lobby';
+          await roomDocRef.update(expiryField());
         } else {
           isHost = true;
           roomPhase = 'lobby';
@@ -746,6 +747,8 @@
       updateHostUI();
       if (roomPhase === 'finished') { onMapFinished(); }
       else if (roomPhase === 'started') { onGameStarted(); }
+
+      cleanupExpiredRooms(roomCode);
 
       unsubRoomDoc = roomDocRef.onSnapshot((snap) => {
         if (!snap.exists || (snap.data() || {}).closed) {
@@ -841,8 +844,8 @@
       if (closeBtn) closeBtn.style.display = (isHost && roomDocRef) ? 'flex' : 'none';
     }
 
-    // Firestore TTL 用：每筆資料帶過期時間，房主忘了按刪除也會被自動清掉。
-    // 需要在 Firebase Console 對 rooms / cards / players 三個 collection group 設定 TTL 欄位 expireAt。
+    // 每筆資料帶過期時間；房主忘了按刪除時，cleanupExpiredRooms 會在之後有人進房時清掉。
+    // 若之後升級 Blaze 方案，也可以直接在 Console 對 rooms / cards / players 設定 TTL 欄位 expireAt。
     const ROOM_TTL_MS = 24 * 60 * 60 * 1000;
     function expiryField() {
       return { expireAt: firebase.firestore.Timestamp.fromMillis(Date.now() + ROOM_TTL_MS) };
